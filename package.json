@@ -1,5 +1,5 @@
 {
-  "name": "time-series-prediction-chat-app",
+  "name": "maifast-ai",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,21 +9,22 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@alloc/quick-lru": "^5.2.0",
+    "@langchain/core": "^1.1.17",
+    "@langchain/google-genai": "^2.1.13",
     "client-only": "^0.0.1",
     "clsx": "^2.1.1",
-    "csv-parse": "^6.1.0",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.25.0",
+    "langchain": "^1.2.14",
     "lucide-react": "^0.562.0",
     "mongoose": "^9.1.2",
     "next": "16.1.1",
+    "next-auth": "^4.24.13",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "recharts": "^3.6.0",
     "server-only": "^0.0.1",
-    "simple-statistics": "^7.8.8",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^20",

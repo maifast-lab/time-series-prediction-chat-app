@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
+import Message from '@/models/Message';
 import Chat from '@/models/Chat';
-import DataSource from '@/models/DataSource';
-import VectorData from '@/models/VectorData';
-import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
@@ -21,19 +19,13 @@ export async function GET(
     const { id } = await params;
 
     const chat = await Chat.findOne({ _id: id, userId: session.user.dbId });
-
-    if (!chat || chat.isDeleted) {
+    if (!chat) {
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
     }
 
-    const hasData = await DataSource.exists({ userId: session.user.dbId });
-
-    return NextResponse.json({
-      chat,
-      hasGlobalData: !!hasData,
-    });
-  } catch (error) {
-    logger.error('Get Chat Error', error);
+    const messages = await Message.find({ chatId: id }).sort({ createdAt: 1 });
+    return NextResponse.json(messages);
+  } catch {
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500 },

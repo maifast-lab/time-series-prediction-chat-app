@@ -1,22 +1,21 @@
 import mongoose from 'mongoose';
+import { logger } from './logger';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
-  console.error('MONGODB_URI is missing from process.env');
+  logger.error('MONGODB_URI is missing from process.env');
   throw new Error(
-    'Please define the MONGODB_URI environment variable inside .env'
+    'Please define the MONGODB_URI environment variable inside .env',
   );
 }
 
-// Global cached connection for hot reloads in development
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var mongoose: MongooseCache;
 }
 
@@ -34,7 +33,7 @@ async function dbConnect() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
-      dbName: 'time-series-prediction-chat-app',
+      dbName: 'maifast',
     };
 
     cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongoose) => {
