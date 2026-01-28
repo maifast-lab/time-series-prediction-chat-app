@@ -41,7 +41,9 @@ export async function POST(
       content: text,
     });
 
-    const dataSources = await DataSource.find({}).select('name schemaSummary');
+    const dataSources = await DataSource.find({
+      userId: session.user.dbId,
+    }).select('name schemaSummary');
     const schemaMap = dataSources
       .map(
         (s) => `Dataset "${s.name}": ${s.schemaSummary || 'Tabular raw data'}`,
@@ -70,7 +72,8 @@ export async function POST(
       [
         'system',
         `
-        You are Maifast, a premium AI assistant. The user is in a chat about "{company}" in "{place}".
+        You are Maifast, a premium AI assistant. The user is in a chat.
+        The current date and time is {currentDate}.
         
         GOAL:
         1. Provide intelligent, helpful, and concise answers to user queries.
@@ -94,6 +97,9 @@ export async function POST(
     const aiText = await chain.invoke({
       company: chat.company,
       place: chat.place,
+      currentDate: new Date().toLocaleString('en-US', {
+        timeZone: 'Asia/Kolkata',
+      }),
       schemaMap,
       context:
         contextString || 'No specific data found in the Excel for this query.',
