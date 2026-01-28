@@ -86,6 +86,7 @@ export default function ChatPage() {
         const data = await res.json();
         setChat(data.chat);
         setHasGlobalData(data.hasGlobalData);
+        window.dispatchEvent(new Event('chat-updated'));
       }
     } catch (e) {
       logger.error('Failed to fetch data', e);
@@ -128,6 +129,10 @@ export default function ChatPage() {
       if (res.ok) {
         const newMessage = await res.json();
         setChatMessages((prev) => [...prev, newMessage]);
+        // Refresh chat details if the title was "New Chat" to show the generated title
+        if (chat?.company === 'New Chat') {
+          fetchData();
+        }
       } else {
         const errorData = await res.json().catch(() => ({}));
         logger.error('API Error', errorData);

@@ -40,6 +40,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     fetchChats();
   }, [params]);
 
+  useEffect(() => {
+    const handleUpdate = () => fetchChats();
+    window.addEventListener('chat-updated', handleUpdate);
+    return () => window.removeEventListener('chat-updated', handleUpdate);
+  }, []);
+
   async function fetchChats() {
     try {
       const res = await fetch('/api/chat');

@@ -23,9 +23,9 @@ export async function POST(
 
     await dbConnect();
     const { id } = await params;
-    const { text } = await req.json();
+    const { text: userText } = await req.json();
 
-    if (!text)
+    if (!userText)
       return NextResponse.json(
         { error: 'Message text required' },
         { status: 400 },
@@ -38,7 +38,7 @@ export async function POST(
     await Message.create({
       chatId: chat._id,
       role: 'user',
-      content: text,
+      content: userText,
     });
 
     const dataSources = await DataSource.find({
@@ -53,7 +53,7 @@ export async function POST(
     let contextString = '';
     try {
       const contextResults = await performVectorSearch(
-        text,
+        userText,
         session.user.dbId,
         20,
       );
@@ -103,7 +103,7 @@ export async function POST(
       schemaMap,
       context:
         contextString || 'No specific data found in the Excel for this query.',
-      input: text,
+      input: userText,
     });
 
     const finalResponse = aiText;
@@ -117,6 +117,31 @@ export async function POST(
       type,
       metadata,
     });
+
+    // Generate automatic title if it's currently "New Chat"
+    if (chat.company === 'New Chat') {
+      try {
+        const titlePrompt = ChatPromptTemplate.fromMessages([
+          [
+            'system',
+            'Generate a extremely concise (max 3-4 words) title for a conversation starting with this message. Return ONLY the title text.',
+          ],
+          ['human', userText],
+        ]);
+        const titleChain = titlePrompt
+          .pipe(model)
+          .pipe(new StringOutputParser());
+        const generatedTitle = await titleChain.invoke({ input: userText });
+
+        if (generatedTitle && generatedTitle.length < 50) {
+          await Chat.findByIdAndUpdate(chat._id, {
+            company: generatedTitle.trim(),
+          });
+        }
+      } catch (tErr) {
+        logger.error('Failed to generate automatic title', tErr);
+      }
+    }
 
     return NextResponse.json(assistantMsg);
   } catch (error: unknown) {
