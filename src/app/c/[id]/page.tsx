@@ -31,8 +31,15 @@ export default function ChatPage() {
   const [inputText, setInputText] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const hasAnyData = hasGlobalData;
+
+  useEffect(() => {
+    if (!isResponding && !loading) {
+      inputRef.current?.focus();
+    }
+  }, [isResponding, loading]);
 
   useEffect(() => {
     async function fetchData() {
@@ -236,6 +243,7 @@ export default function ChatPage() {
             className='max-w-4xl mx-auto relative group'
           >
             <input
+              ref={inputRef}
               type='text'
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
