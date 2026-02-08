@@ -239,6 +239,23 @@ export default function ChatPage() {
                 </div>
               </motion.div>
             ))}
+            {isResponding && (
+              <motion.div
+                key='thinking'
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className='flex flex-col max-w-[80%] mr-auto items-start'
+              >
+                <div className='text-[10px] text-gray-500 mb-1 px-2 uppercase tracking-tighter'>
+                  Maifast
+                </div>
+                <div className='bg-white/5 border border-white/10 text-gray-300 p-4 rounded-2xl rounded-tl-none text-sm leading-relaxed flex items-center gap-3'>
+                  <Loader2 className='w-4 h-4 animate-spin text-blue-400' />
+                  <span className='animate-pulse'>Thinking...</span>
+                </div>
+              </motion.div>
+            )}
             <div ref={messagesEndRef} />
           </AnimatePresence>
         </div>

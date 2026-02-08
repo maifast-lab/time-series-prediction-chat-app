@@ -167,6 +167,99 @@ function parseMyExcel(grid: any[][]): ParsedPoint[] {
   return points;
 }
 
+/**
+ * Method: parseDynamicExcel (Fallback)
+ * Heuristics:
+ * 1. Find a column or row that looks like Dates.
+ * 2. Treat other columns/rows as Tags.
+ */
+function parseDynamicExcel(grid: any[][]): ParsedPoint[] {
+  const points: ParsedPoint[] = [];
+  if (!grid || grid.length < 2) return points;
+
+  // Function to check if a value is a date-like string or number
+  const isDateLike = (val: any): boolean => {
+    if (val instanceof Date) return true;
+    if (typeof val === 'number' && val > 20000 && val < 60000) return true; // Excel serial dates
+    if (typeof val === 'string' && val.length > 5 && !isNaN(Date.parse(val)))
+      return true;
+    return false;
+  };
+
+  // 1. Analyze Columns for Date Pattern
+  let dateColIdx = -1;
+  let maxDateCount = 0;
+  const numRows = Math.min(grid.length, 20); // Check first 20 rows
+  const numCols = grid[0]?.length || 0;
+
+  for (let j = 0; j < numCols; j++) {
+    let dateCount = 0;
+    for (let i = 1; i < numRows; i++) {
+      // Skip header row 0
+      if (isDateLike(grid[i]?.[j])) dateCount++;
+    }
+    if (dateCount > maxDateCount) {
+      maxDateCount = dateCount;
+      dateColIdx = j;
+    }
+  }
+
+  // Threshold: If > 40% of checked rows have a date in this col, assume it's the Date Col
+  if (maxDateCount > (numRows - 1) * 0.4) {
+    logger.info(
+      `Dynamic Parser: Detected Vertical Layout with Date Column at index ${dateColIdx}`,
+    );
+
+    // Vertical Layout: iterate rows
+    // Row 0 is headers (Tags)
+    // Col `dateColIdx` is Date
+    // Other Cols are Values
+
+    for (let i = 1; i < grid.length; i++) {
+      const row = grid[i];
+      if (!row || row.length <= dateColIdx) continue;
+
+      let dateVal = row[dateColIdx];
+      let date: Date | null = null;
+
+      try {
+        if (typeof dateVal === 'number') {
+          // Excel serial date to JS Date
+          date = new Date(Math.round((dateVal - 25569) * 86400 * 1000));
+        } else {
+          date = new Date(dateVal);
+        }
+      } catch {
+        continue;
+      }
+
+      if (!date || isNaN(date.getTime())) continue;
+
+      // Iterate other columns for values
+      for (let j = 0; j < row.length; j++) {
+        if (j === dateColIdx) continue;
+
+        const tag = String(grid[0][j] || `Col_${j}`).trim();
+        const val = row[j];
+
+        if (val !== null && val !== '' && !isNaN(Number(val))) {
+          points.push({
+            date: date,
+            tag: isNaN(Number(tag)) ? tag : `Series_${tag}`, // Avoid numeric tags if possible
+            value: Number(val),
+          });
+        }
+      }
+    }
+    return points;
+  }
+
+  // 2. Horizontal Layout Check? (Not implemented as complex, falling back to Vertical only for now as it covers 90% of generic CSVs)
+  // If no vertical date column found, we could check rows, but let's stick to vertical common format for now.
+
+  return points;
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -210,6 +303,15 @@ export async function POST(req: Request) {
 
         if (points.length > 0) {
           allPoints = allPoints.concat(points);
+        } else {
+          // Fallback to Dynamic Parser
+          const dynamicPoints = parseDynamicExcel(data);
+          if (dynamicPoints.length > 0) {
+            logger.info(
+              `Fallback to Dynamic Parser success: ${dynamicPoints.length} points`,
+            );
+            allPoints = allPoints.concat(dynamicPoints);
+          }
         }
       }
     }
