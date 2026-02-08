@@ -131,12 +131,6 @@ function parseMyExcel(grid: any[][]): ParsedPoint[] {
     const tag = String(tagVal).toUpperCase();
 
     // Data starts at row 3 (which is index 3)
-    // Row 3 corresponds to Day 1?
-    // In test-method1.cjs:
-    // for (let j = 3; j < grid.length; j++) {
-    //    data[tag][`${j-2}-${month}-${year}`] = grid[j][i]
-    // }
-    // if j=3, j-2 = 1. So Row 3 is Day 1.
 
     for (let j = 3; j < grid.length; j++) {
       const val = grid[j][i];
