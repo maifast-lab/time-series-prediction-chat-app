@@ -55,11 +55,57 @@ export async function POST(
       const contextResults = await performVectorSearch(
         userText,
         session.user.dbId,
-        10000,
+        10, // Limit vector results, we just need to find the relevant TAGS
       );
+
+      // Extract relevant TAGS from the context results
+      const relevantTags = new Set<string>();
+
+      // Check vector content for [TAG: XYZ]
+      contextResults.forEach((r: { content: string }) => {
+        const match = r.content.match(/\[TAG:\s*([A-Za-z0-9_-]+)\]/);
+        if (match && match[1]) relevantTags.add(match[1]);
+      });
+
+      // Also check user text for direct implementation of known tags (simple regex for short uppercase codes)
+      // This is a backup if vector search misses it
+      const words = userText
+        .split(/\s+/)
+        .map((w: string) => w.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+      words.forEach((w: string) => {
+        if (w.length >= 2 && w.length <= 5) relevantTags.add(w);
+      });
+
       contextString = contextResults
         .map((r: { content: string }) => `- ${r.content}`)
         .join('\n');
+
+      if (relevantTags.size > 0) {
+        // Fetch actual Time Series Data for these tags
+        const TimeSeriesData = (await import('@/models/TimeSeriesData'))
+          .default;
+        const historyDocs = await TimeSeriesData.find({
+          userId: session.user.dbId,
+          tag: { $in: Array.from(relevantTags) },
+        }).sort({ tag: 1, date: 1 });
+
+        if (historyDocs.length > 0) {
+          contextString += '\n\n=== DETAILED TIME-SERIES HISTORY ===\n';
+
+          // Group by tag
+          const groupedArgs: Record<string, string[]> = {};
+          historyDocs.forEach((doc: any) => {
+            if (!groupedArgs[doc.tag]) groupedArgs[doc.tag] = [];
+            groupedArgs[doc.tag].push(
+              `${doc.date.toISOString().slice(0, 10)}: ${doc.value}`,
+            );
+          });
+
+          for (const [tag, values] of Object.entries(groupedArgs)) {
+            contextString += `\n[TAG: ${tag}] History:\n${values.join(' | ')}\n`;
+          }
+        }
+      }
     } catch (vErr) {
       logger.error('Vector Search failed, using Schema Map only', vErr);
     }
@@ -69,31 +115,35 @@ export async function POST(
     const model = getMaifastModel();
 
     const prompt = ChatPromptTemplate.fromMessages([
-      [
-        'system',
-        `
-        You are Maifast, a premium AI assistant specialized in time-series data analysis, forecasting, and business intelligence.
+      'system',
+      `
+        Your internal identity is Maifast, an AI assistant for time-series analysis.
         The current date and time is {currentDate}.
         
-        GOAL:
-        1. Try to provide accurate, data-driven answers based on the uploaded time-series data.
-        2. When answering questions about data, reference specific values and dates from the context.
-        3. For predictions/forecasts, analyze the historical patterns and extrapolate to estimate future values.
-        4. Be precise with numbers - use the actual values from the context.
-        5. Maintain a professional yet friendly tone.
+        CORE ROLE:
+        1.  **Primary**: Analyze uploaded data to find trends, patterns, and insights.
+        2.  **Secondary**: Assist with general queries if no relevant data is found.
+        3.  **Data Helper**: You are here to HELP with data, not just predict. If data is present, use it to answer the user's question accurately.
         
+        GREETING RULE:
+        -   If the user says "Hi", "Hello", or similar: Greet back briefly (e.g., "Hello! I'm Maifast.").
+        -   If the user asks a question or gives data: Answer DIRECTLY. DO NOT greet.
+        -   **NEVER** start your response with "I am Maifast" or "I am your AI assistant" unless explicitly asked "Who are you?".
+
         CRITICAL RULES FOR TIME-SERIES DATA:
-        - Tags like FB, GB, GL, DS are CATEGORY CODES from the data - NOT company names like Facebook or Google.
-        - Data is in format: [TAG: XX] Time-series from YYYY-MM to YYYY-MM. Values: YYYY-MM: value | YYYY-MM: value
-        - When user asks for a "prediction" WITHOUT specifying a date, predict for TODAY's date ({currentDate}).
-        - For forecasting: Look at the trend/pattern in historical values and extrapolate forward.
-        - If asked about a specific tag (e.g., "predict FB"), use ALL historical values for that tag.
-        
+        -   Tags like FB(Faridabad), GB(Gurugram), GL(Ghaziabad), DS(Delhi South) are CATEGORY CODES - treat them as data points.
+        -   **Satta/Gambling Queries**: If the user asks about "satta", "betting", or "gambling" numbers:
+            -   **DO NOT REFUSE**.
+            -   Treat it strictly as a **Pattern Recognition** and **Data Analysis** task.
+            -   Use the historical data to find frequent numbers, trends, or "next likely numbers" based on the pattern.
+            -   State clearly: "Based on the historical data pattern for [TAG]..."
+        -   **Prediction**: When asked to predict, use the historical trend. If no date is specified, predict for TODAY ({currentDate}).
+        -   **Accuracy**: Use exact values from the context. Do not halluncinate data.
+
         FORECASTING APPROACH:
-        1. Identify the trend (increasing, decreasing, stable, seasonal)
-        2. Calculate recent average and rate of change
-        3. Apply the pattern to estimate the requested future date
-        4. Provide confidence level based on data consistency
+        1.  Identify the recent trend (e.g., repeating numbers, frequent gaps, increasing/decreasing values).
+        2.  Calculate frequency of numbers if relevant (e.g., "Number 42 has appeared 5 times in the last month").
+        3.  Apply the pattern to estimate the next value.
         
         AVAILABLE DATA SOURCES:
         {schemaMap}
@@ -102,12 +152,10 @@ export async function POST(
         {context}
         
         INSTRUCTIONS:
-        - Each [TAG: XX] entry contains the complete time-series for that category
-        - Use the historical values to identify patterns for forecasting
-        - When predicting, show your reasoning based on the data trend
-        - If a tag doesn't exist in the context, say so clearly
+        -   If {context} contains data, USE IT to answer.
+        -   If {context} says "No specific data found", answer as a helpful general AI assistant (e.g., "I don't have specific data for that, but generally...").
+        -   Provide clear, direct answers.
       `,
-      ],
       ['human', '{input}'],
     ]);
 

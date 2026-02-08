@@ -22,25 +22,25 @@ export const getMaifastModel = (modelName: string = 'gemini-2.5-flash') => {
   return new ChatGoogleGenerativeAI({
     model: modelName.includes('2.5') ? 'gemini-2.5-flash' : modelName,
     apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-    temperature: 0,
+    temperature: 0.2,
   });
 };
 
 export const getMaifastEmbeddings = () => {
   return new GoogleGenerativeAIEmbeddings({
     apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-    model: 'text-embedding-004',
+    model: 'gemini-embedding-001',
   });
 };
 
 export const getEmbeddings = async (text: string) => {
-  const model = genAI.getGenerativeModel({ model: 'text-embedding-004' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
   const result = await model.embedContent(text);
   return result.embedding.values;
 };
 
 export const getBatchEmbeddings = async (texts: string[]) => {
-  const model = genAI.getGenerativeModel({ model: 'text-embedding-004' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
   const result = await model.batchEmbedContents({
     requests: texts.map((t) => ({
       content: { role: 'user', parts: [{ text: t }] },

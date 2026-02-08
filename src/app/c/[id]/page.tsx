@@ -191,6 +191,7 @@ export default function ChatPage() {
           <AnimatePresence>
             {chatMessages.length === 0 && !hasAnyData && (
               <motion.div
+                key='empty-state'
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className='max-w-md mx-auto mt-20 p-8 rounded-3xl bg-blue-500/5 border border-blue-500/10 text-center'
@@ -208,9 +209,9 @@ export default function ChatPage() {
               </motion.div>
             )}
 
-            {chatMessages.map((msg) => (
+            {chatMessages.map((msg, index) => (
               <motion.div
-                key={msg._id}
+                key={msg._id || `msg-${index}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className={cn(
