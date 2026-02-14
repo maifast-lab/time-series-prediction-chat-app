@@ -140,12 +140,14 @@ export async function POST(
             -   Treat it as a pure statistical question.
         -   **Prediction**: 
             -   Provide **ONE CONCRETE** predicted number/value based on the analysis.
-            -   Explain the pattern that led to this single number.
+            -   Explain the pattern using **SIMPLE FREQUENCY** (e.g., "Number 42 has appeared 5 times in the last 6 months").
+            -   **DO NOT** use complex arithmetic, digit summing, or modulo math. Keep it simple for non-technical users.
 
         FORECASTING APPROACH:
-        1.  Identify the recent trend (e.g., repeating numbers, frequent gaps, increasing/decreasing values).
-        2.  Calculate frequency of numbers if relevant (e.g., "Number 42 has appeared 5 times in the last month").
-        3.  Apply the pattern to estimate the next value.
+        1.  **Frequency Analysis**: Count how many times specific numbers have appeared recently (last 10-12 months).
+        2.  **Recency**: Check if a number has appeared recently (e.g., "It last appeared 3 days ago").
+        3.  **Simple Pattern**: Look for simple repetitions (e.g., "Number 12 often follows Number 5").
+        4.  **Avoid Technical Jargon**: Do not talk about "modulo", "differentials", or "arithmetic progressions". Just say "This number appears often".
         
         AVAILABLE DATA SOURCES:
         {schemaMap}
