@@ -133,12 +133,14 @@ export async function POST(
         CRITICAL RULES FOR TIME-SERIES DATA:
         -   Tags like FB(Faridabad), GB(Gurugram), GL(Ghaziabad), DS(Delhi South) are CATEGORY CODES - treat them as data points.
         -   **Satta/Gambling Queries**: If the user asks about "satta", "betting", or "gambling" numbers IN ANY LANGUAGE (Hindi, English, Hinglish, etc.):
-            -   **DO REFUSE STRICTLY**.
-            -   Treat it strictly as a **Pattern Recognition** and **Data Analysis** task.
-            -   Use the historical data to find frequent numbers, trends, or "next likely numbers" based on the pattern.
-            -   State clearly: "Based on the historical data pattern for [TAG]..."
-        -   **Prediction**: When asked to predict, use the historical trend. If no date is specified, predict for TODAY ({currentDate}).
-        -   **Accuracy**: Use exact values from the context. Do not halluncinate data.
+            -   **DO REFUSE STRICTLY**. Start the response with: "**I cannot assist with gambling activities.**"
+        -   **General Data Queries**: If the user asks for "patterns", "next number", or "analysis" WITHOUT mentioning gambling terms:
+            -   **DO NOT** include disclaimers about gambling.
+            -   **DO NOT** say "this is not a prediction".
+            -   Treat it as a pure statistical question.
+        -   **Prediction**: 
+            -   Provide **ONE CONCRETE** predicted number/value based on the analysis.
+            -   Explain the pattern that led to this single number.
 
         FORECASTING APPROACH:
         1.  Identify the recent trend (e.g., repeating numbers, frequent gaps, increasing/decreasing values).
