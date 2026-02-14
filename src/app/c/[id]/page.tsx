@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface ChatDetails {
   _id: string;
@@ -232,7 +234,55 @@ export default function ChatPage() {
                       : 'bg-white/5 border border-white/10 text-gray-200 rounded-tl-none',
                   )}
                 >
-                  {msg.content}
+                  <div className='prose prose-invert prose-p:leading-relaxed prose-pre:p-0 break-words'>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ children }) => (
+                          <p className='mb-2 last:mb-0'>{children}</p>
+                        ),
+                        ul: ({ children }) => (
+                          <ul className='list-disc ml-4 mb-2'>{children}</ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className='list-decimal ml-4 mb-2'>{children}</ol>
+                        ),
+                        li: ({ children }) => (
+                          <li className='mb-1'>{children}</li>
+                        ),
+                        code: ({
+                          inline,
+                          className,
+                          children,
+                          ...props
+                        }: any) => {
+                          const match = /language-(\w+)/.exec(className || '');
+                          return !inline ? (
+                            <div className='rounded-lg bg-black/30 border border-white/10 p-3 my-2 overflow-x-auto'>
+                              <code
+                                className={cn(
+                                  'font-mono text-sm text-gray-200',
+                                  className,
+                                )}
+                                {...props}
+                              >
+                                {children}
+                              </code>
+                            </div>
+                          ) : (
+                            <code
+                              className='font-mono text-sm bg-black/30 px-1.5 py-0.5 rounded text-gray-200'
+                              {...props}
+                            >
+                              {children}
+                            </code>
+                          );
+                        },
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
                 </div>
                 <div className='text-[10px] text-gray-600 mt-1 px-2'>
                   {format(new Date(msg.createdAt), 'HH:mm')}

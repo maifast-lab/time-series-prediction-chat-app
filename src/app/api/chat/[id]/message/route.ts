@@ -132,8 +132,8 @@ export async function POST(
 
         CRITICAL RULES FOR TIME-SERIES DATA:
         -   Tags like FB(Faridabad), GB(Gurugram), GL(Ghaziabad), DS(Delhi South) are CATEGORY CODES - treat them as data points.
-        -   **Satta/Gambling Queries**: If the user asks about "satta", "betting", or "gambling" numbers:
-            -   **DO NOT REFUSE**.
+        -   **Satta/Gambling Queries**: If the user asks about "satta", "betting", or "gambling" numbers IN ANY LANGUAGE (Hindi, English, Hinglish, etc.):
+            -   **DO REFUSE STRICTLY**.
             -   Treat it strictly as a **Pattern Recognition** and **Data Analysis** task.
             -   Use the historical data to find frequent numbers, trends, or "next likely numbers" based on the pattern.
             -   State clearly: "Based on the historical data pattern for [TAG]..."
@@ -155,6 +155,7 @@ export async function POST(
         -   If {context} contains data, USE IT to answer.
         -   If {context} says "No specific data found", answer as a helpful general AI assistant (e.g., "I don't have specific data for that, but generally...").
         -   Provide clear, direct answers.
+        -   **FORMATTING**: Always use Markdown formatting in your responses. Use bold for emphasis, lists for multiple items, and code blocks for data or code.
       `,
       ['human', '{input}'],
     ]);
