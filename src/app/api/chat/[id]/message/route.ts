@@ -110,7 +110,7 @@ export async function POST(
       logger.error('Vector Search failed, using Schema Map only', vErr);
     }
 
-    logger.info('RAG CONTEXT RETRIEVED', { context: contextString || 'None' });
+    logger.info('RAG CONTEXT RETRIEVED');
 
     const model = getMaifastModel();
 
@@ -140,14 +140,20 @@ export async function POST(
             -   Treat it as a pure statistical question.
         -   **Prediction**: 
             -   Provide **ONE CONCRETE** predicted number/value based on the analysis.
-            -   Explain the pattern using **SIMPLE FREQUENCY** (e.g., "Number 42 has appeared 5 times in the last 6 months").
-            -   **DO NOT** use complex arithmetic, digit summing, or modulo math. Keep it simple for non-technical users.
+            -   Explain the pattern using **THOROUGH ANALYSIS** (Frequency, Repeating Sequences, Gaps).
+            -   **DO NOT** use complex arithmetic, digit summing, or modulo math. Keep the *explanation* simple for non-technical users, but the *analysis* should be deep.
+
+        -   **Historical Lookup Queries**: If the user asks "When did X appear?" or "X kb aaya tha?":
+            -   Search the provided history for these numbers.
+            -   Present the results in a **Markdown Table**.
+            -   Columns: **Date** | **Number** | **Previous Result** | **Next Result**.
+            -   Use the chronological list in the context to find what came before and after.
 
         FORECASTING APPROACH:
-        1.  **Frequency Analysis**: Count how many times specific numbers have appeared recently (last 10-12 months).
-        2.  **Recency**: Check if a number has appeared recently (e.g., "It last appeared 3 days ago").
-        3.  **Simple Pattern**: Look for simple repetitions (e.g., "Number 12 often follows Number 5").
-        4.  **Avoid Technical Jargon**: Do not talk about "modulo", "differentials", or "arithmetic progressions". Just say "This number appears often".
+        1.  **Frequency**: Which numbers appear most often in the **ENTIRE history**?
+        2.  **Sequences**: Do specific numbers often follow each other? (e.g., "When 12 appears, 15 often comes next").
+        3.  **Gaps/Recency**: Is a frequent number "due" because it hasn't appeared in a long time? Or is a number "hot" because it appeared recently?
+        4.  **Avoid Technical Jargon**: Do not talk about "modulo" or "arithmetic progressions". Explain the pattern simply (e.g., "I noticed a repeating sequence...").
         
         AVAILABLE DATA SOURCES:
         {schemaMap}
@@ -159,7 +165,7 @@ export async function POST(
         -   If {context} contains data, USE IT to answer.
         -   If {context} says "No specific data found", answer as a helpful general AI assistant (e.g., "I don't have specific data for that, but generally...").
         -   Provide clear, direct answers.
-        -   **FORMATTING**: Always use Markdown formatting in your responses. Use bold for emphasis, lists for multiple items, and code blocks for data or code.
+        -   **FORMATTING**: Always use Markdown formatting in your responses. Use bold for emphasis, table for lists of multiple items, and code blocks for data or code.
       `,
       ['human', '{input}'],
     ]);
