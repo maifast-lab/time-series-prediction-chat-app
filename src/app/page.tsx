@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import { Sparkles, MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
+import logoImg from './logo.jpg';
 
 export default function Home() {
   const router = useRouter();
@@ -39,8 +41,8 @@ export default function Home() {
           animate={{ opacity: 1, scale: 1 }}
           className='max-w-2xl'
         >
-          <div className='w-20 h-20 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-blue-500/20'>
-            <Sparkles className='w-10 h-10 text-blue-400' />
+          <div className='w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-white/10 overflow-hidden shadow-2xl shadow-blue-500/20'>
+            <Image src={logoImg} alt="Maifast Logo" className="w-full h-full object-cover" />
           </div>
 
           <h1 className='text-4xl font-bold text-white mb-4 tracking-tight text-center md:text-5xl'>

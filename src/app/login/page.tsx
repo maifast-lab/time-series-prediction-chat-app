@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { MessageSquare, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
+import logoImg from '../logo.jpg';
 
 export default function LoginPage() {
   const { data: session, status } = useSession();
@@ -37,12 +39,9 @@ export default function LoginPage() {
         className='w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl relative z-10'
       >
         <div className='flex flex-col items-center mb-8'>
-          <div className='w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mb-6 shadow-2xl shadow-blue-500/20'>
-            <MessageSquare className='w-8 h-8 text-white' />
+          <div className='w-16 h-16 rounded-2xl flex items-center justify-center mb-6 shadow-2xl shadow-blue-500/20 overflow-hidden border border-white/10'>
+            <Image src={logoImg} alt="Maifast Logo" className="w-full h-full object-cover" />
           </div>
-          <h1 className='text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 mb-2'>
-            Maifast
-          </h1>
           <p className='text-gray-400 text-center'>
             Log in to access your personal AI assistant and custom data
             insights.

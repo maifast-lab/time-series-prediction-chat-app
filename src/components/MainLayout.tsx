@@ -16,6 +16,8 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from '@/lib/logger';
 import { useSession, signIn, signOut } from 'next-auth/react';
+import Image from 'next/image';
+import logoImg from '@/app/logo.jpg';
 
 interface ChatSummary {
   _id: string;
@@ -145,7 +147,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               transition={{ duration: 0.3, ease: 'easeInOut' }}
               className='fixed md:relative w-[280px] md:w-[260px] flex-shrink-0 bg-[#000510]/80 backdrop-blur-xl border-r border-white/10 flex flex-col h-full z-50'
             >
-              <div className='p-4 pt-16 md:pt-4'>
+              <div className='p-4 pt-16 md:pt-4 flex flex-col gap-6'>
+                <div className='flex items-center gap-3 px-2'>
+                  <div className='w-8 h-8 rounded-lg overflow-hidden border border-white/10 shadow-lg shadow-blue-500/20'>
+                    <Image src={logoImg} alt="Maifast Logo" className="w-full h-full object-cover" />
+                  </div>
+                  <span className='font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400'>
+                    Maifast
+                  </span>
+                </div>
+
                 <button
                   onClick={async () => {
                     try {
