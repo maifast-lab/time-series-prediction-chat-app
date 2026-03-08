@@ -162,7 +162,7 @@ export async function POST(
         {context}
         
         INSTRUCTIONS:
-        -   If {context} contains data, USE IT to answer.
+        -   If {context} contains data, USE IT to answer with proper multiple references (It should contains dates and numbers) upto 5.
         -   If {context} says "No specific data found", answer as a helpful general AI assistant (e.g., "I don't have specific data for that, but generally...").
         -   Provide clear, direct answers.
         -   **FORMATTING**: Always use Markdown formatting in your responses. Use bold for emphasis, table for lists of multiple items, and code blocks for data or code.

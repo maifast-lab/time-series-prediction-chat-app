@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Maifast AI',
+  title: 'Maifast',
   description: 'A premium AI chat application for everyone.',
 };
 

@@ -41,7 +41,7 @@ export default function LoginPage() {
             <MessageSquare className='w-8 h-8 text-white' />
           </div>
           <h1 className='text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 mb-2'>
-            Maifast AI
+            Maifast
           </h1>
           <p className='text-gray-400 text-center'>
             Log in to access your personal AI assistant and custom data
