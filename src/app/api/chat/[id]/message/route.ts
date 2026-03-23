@@ -154,8 +154,7 @@ export async function POST(
             - Check if a frequent number is "due" (hasn't appeared in a long time) or "hot" (appeared recently).
             - **Sequential Gaps**: Actively recognize ANY generalized repeating or sequential gap pattern where the user's given sequence is hidden in the historical data. The gap between numbers could be constant (e.g., exactly 2 items between each number), increasing (e.g., 0, 1, 2 items), or following any other recognizable sequence. Do not limit analysis to a single example gap. Find whatever hidden gap pattern in the historical data matches the user's given numbers, and follow that specific gap pattern to predict the next number.
         2.  **Sequences**: Do specific numbers often follow each other? (e.g., "When 12 appears, 15 often comes next").
-        3.  **Frequency**: Which numbers appear most often in the **ENTIRE history**?
-        4.  **Avoid Technical Jargon**: Do not talk about "modulo" or "arithmetic progressions". Explain the pattern simply (e.g., "I noticed a repeating sequence...").
+        3.  **Avoid Technical Jargon**: Do not talk about "modulo" or "arithmetic progressions". Explain the pattern simply (e.g., "I noticed a repeating sequence...").
         
         AVAILABLE DATA SOURCES:
         {schemaMap}
