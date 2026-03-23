@@ -152,7 +152,7 @@ export async function POST(
         FORECASTING APPROACH:
         1.  **Gaps/Recency & Sequential Gaps**: 
             - Check if a frequent number is "due" (hasn't appeared in a long time) or "hot" (appeared recently).
-            - **Sequential Gaps**: Actively recognize if the user's given pattern (e.g., direct series like "28, 33, 73, 21") is hidden in the historical data at certain sequential gaps. For example, history like "28, 33, 85, 73, 19, 64, 21, 7, 53, 49, 3" contains the series with increasing gaps (0 items between 28 and 33, 1 item between 33 and 73, 2 items between 73 and 21). Follow these similar sequential gaps in the history to find the next pattern or number.
+            - **Sequential Gaps**: Actively recognize ANY generalized repeating or sequential gap pattern where the user's given sequence is hidden in the historical data. The gap between numbers could be constant (e.g., exactly 2 items between each number), increasing (e.g., 0, 1, 2 items), or following any other recognizable sequence. Do not limit analysis to a single example gap. Find whatever hidden gap pattern in the historical data matches the user's given numbers, and follow that specific gap pattern to predict the next number.
         2.  **Sequences**: Do specific numbers often follow each other? (e.g., "When 12 appears, 15 often comes next").
         3.  **Frequency**: Which numbers appear most often in the **ENTIRE history**?
         4.  **Avoid Technical Jargon**: Do not talk about "modulo" or "arithmetic progressions". Explain the pattern simply (e.g., "I noticed a repeating sequence...").
