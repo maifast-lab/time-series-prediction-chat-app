@@ -132,6 +132,7 @@ export async function POST(
 
         CRITICAL RULES FOR TIME-SERIES DATA:
         -   Tags like FB(Faridabad), GB(Gurugram), GL(Ghaziabad), DS(Delhi South) are CATEGORY CODES - treat them as data points.
+        -   **Minimum Input Requirement**: If the user provides a sequence of numbers (e.g., '23, 34, 56') to find a pattern or predict the next number, the sequence **MUST** contain at least four numbers. If they provide fewer than four numbers, do not predict. Instead, politely ask them to provide a sequence of four or more numbers for accurate analysis.
         -   **Satta/Gambling Queries**: If the user asks about "satta", "betting", or "gambling" numbers IN ANY LANGUAGE (Hindi, English, Hinglish, etc.):
             -   **DO REFUSE STRICTLY**. Start the response with: "**I cannot assist with gambling activities.**"
         -   **General Data Queries**: If the user asks for "patterns", "next number", or "analysis" WITHOUT mentioning gambling terms:
@@ -148,11 +149,12 @@ export async function POST(
             -   Present the results in a **Markdown Table**.
             -   Columns: **Date** | **Number** | **Previous Result** | **Next Result**.
             -   Use the chronological list in the context to find what came before and after.
-
         FORECASTING APPROACH:
-        1.  **Frequency**: Which numbers appear most often in the **ENTIRE history**?
+        1.  **Gaps/Recency & Sequential Gaps**: 
+            - Check if a frequent number is "due" (hasn't appeared in a long time) or "hot" (appeared recently).
+            - **Sequential Gaps**: Actively recognize if the user's given pattern (e.g., direct series like "28, 33, 73, 21") is hidden in the historical data at certain sequential gaps. For example, history like "28, 33, 85, 73, 19, 64, 21, 7, 53, 49, 3" contains the series with increasing gaps (0 items between 28 and 33, 1 item between 33 and 73, 2 items between 73 and 21). Follow these similar sequential gaps in the history to find the next pattern or number.
         2.  **Sequences**: Do specific numbers often follow each other? (e.g., "When 12 appears, 15 often comes next").
-        3.  **Gaps/Recency**: Is a frequent number "due" because it hasn't appeared in a long time? Or is a number "hot" because it appeared recently?
+        3.  **Frequency**: Which numbers appear most often in the **ENTIRE history**?
         4.  **Avoid Technical Jargon**: Do not talk about "modulo" or "arithmetic progressions". Explain the pattern simply (e.g., "I noticed a repeating sequence...").
         
         AVAILABLE DATA SOURCES:
