@@ -146,7 +146,7 @@ export async function POST(
               1.  **Context**: Start by clearly stating the specific tag and the relevant month/year of the historical data being analyzed (e.g., "For the [TAG] in [Month Year]...").
               2.  **Sequence Identification**: List each number from the user's provided sequence, explicitly stating the number and its corresponding date from the historical data.
               3.  **Detailed Gap Analysis**: For each pair of consecutive numbers in the identified sequence, explicitly state the count of intermediate numbers and list those intermediate numbers with their dates.
-              4.  **Pattern Summary**: Clearly describe the identified sequential gap pattern (e.g., "an increasing gap of 1, 2, then 3 numbers").
+              4.  **Pattern Summary**: Clearly describe the identified sequential gap pattern (e.g., "an increasing gap of 1, 2, then 3 numbers","an increasing gap of 0, 1, then 2 numbers").
               5.  **Next Gap Calculation**: State the expected next gap based on the identified pattern.
               6.  **Prediction Steps**: Explicitly show the counting process for the next predicted number, listing the skipped numbers and their dates based on the calculated gap.
               7.  **Final Prediction**: Conclude with the single predicted number and the date it appeared in the historical data.
