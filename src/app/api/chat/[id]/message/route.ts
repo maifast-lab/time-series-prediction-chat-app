@@ -55,7 +55,7 @@ export async function POST(
       const contextResults = await performVectorSearch(
         userText,
         session.user.dbId,
-        10, // Limit vector results, we just need to find the relevant TAGS
+        1000, // Limit vector results, we just need to find the relevant TAGS
       );
 
       // Extract relevant TAGS from the context results
@@ -158,12 +158,10 @@ export async function POST(
             -   Columns: **Date** | **Number**.
             -   Use the chronological list in the context to find what came before and after.
         FORECASTING APPROACH:
-        1.  **Gaps/Recency & Sequential Gaps**: 
-            - Check if a frequent number is "due" (hasn't appeared in a long time) or "hot" (appeared recently).
+        1.  **Data Handling**: Whenever user pass the four number which is nothing but last four days data so while doing the forecasting make sure to skip this last four days data and then do the analysis.
+        2.  **Gaps/Recency & Sequential Gaps**: 
             - **Sequential Gaps**: Actively recognize ANY generalized repeating or sequential gap pattern where the user's given sequence is hidden in the historical data. The gap between numbers could be constant (e.g., exactly 2 items between each number), increasing (e.g., 0, 1, 2 items), or following any other recognizable sequence. Do not limit analysis to a single example gap. Find whatever hidden gap pattern in the historical data matches the user's given numbers, and follow that specific gap pattern to predict the next number.
-        2.  **Sequences**: Do specific numbers often follow each other? (e.g., "When 12 appears, 15 often comes next").
-        3.  **Frequency**: Which numbers appear most often in the **ENTIRE history**?
-        4.  **Avoid Technical Jargon**: Do not talk about "modulo" or "arithmetic progressions". Explain the pattern simply (e.g., "I noticed a repeating sequence...").
+        3.  **Avoid Technical Jargon**: Do not talk about "modulo" or "arithmetic progressions". Explain the pattern simply (e.g., "I noticed a repeating sequence...").
         
         AVAILABLE DATA SOURCES:
         {schemaMap}
