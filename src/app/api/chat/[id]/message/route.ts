@@ -84,6 +84,32 @@ function buildGeminiFallbackMessage(error: unknown): string {
   ].join('\n');
 }
 
+function normalizePatternResponse(text: string): string {
+  const trimmed = text.trim().replace(/\r\n?/g, '\n');
+  const headerMatch = trimmed.match(/^Ye pattern \d+ jgh mila hai\s*:/i);
+
+  if (!headerMatch) {
+    return trimmed;
+  }
+
+  const header = headerMatch[0].replace(/\s*:\s*$/, ' :');
+  const remainder = trimmed.slice(headerMatch[0].length).trim();
+
+  if (!remainder) {
+    return header;
+  }
+
+  const entryMatches = remainder.match(
+    /(?:\d{1,2}(?:st|nd|rd|th)\s+[A-Za-z]+(?:\s+\d{4})?|Row\s+\d+)\s*-\s*-?\d+(?:\.\d+)?/g,
+  );
+
+  if (!entryMatches || entryMatches.length === 0) {
+    return `${header}  \n${remainder}`;
+  }
+
+  return `${header}  \n${entryMatches.join('  \n')}`;
+}
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -293,8 +319,9 @@ OUTPUT RULES:
 - Do not add Markdown, headings, explanations, comments, or extra text.
 - If matches exist, return in this exact dynamic format:
 Ye pattern <actual match count> jgh mila hai : 
-<next row date in readable format> - <next value from JSON> 
-<next row date in readable format> - <next value from JSON>
+<next row date in readable format> - <next value from JSON> ,
+<next row date in readable format> - <next value from JSON> ,
+- Put every matched result on its own new line. Never place multiple results on one line.
 - The first line must contain the real number of matched series you are returning.
 - Each line after the first must represent one matched series only.
 - For each matched series, use the date from that series' points array at the computed next row.
@@ -359,7 +386,7 @@ EXTRA TIME-SERIES CONTEXT:
       return NextResponse.json(assistantMsg);
     }
 
-    const finalResponse = aiText;
+    const finalResponse = normalizePatternResponse(aiText);
     const type = 'text';
     const metadata = {};
 

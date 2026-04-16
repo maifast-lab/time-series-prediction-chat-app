@@ -33,6 +33,32 @@ type MarkdownCodeProps = ComponentPropsWithoutRef<'code'> & {
   inline?: boolean;
 };
 
+function normalizePatternMessageForDisplay(content: string): string {
+  const trimmed = content.trim().replace(/\r\n?/g, '\n');
+  const headerMatch = trimmed.match(/^Ye pattern \d+ jgh mila hai\s*:/i);
+
+  if (!headerMatch) {
+    return content;
+  }
+
+  const header = headerMatch[0].replace(/\s*:\s*$/, ' :');
+  const remainder = trimmed.slice(headerMatch[0].length).trim();
+
+  if (!remainder) {
+    return header;
+  }
+
+  const entryMatches = remainder.match(
+    /(?:\d{1,2}(?:st|nd|rd|th)\s+[A-Za-z]+(?:\s+\d{4})?|Row\s+\d+)\s*-\s*-?\d+(?:\.\d+)?/g,
+  );
+
+  if (!entryMatches || entryMatches.length === 0) {
+    return `${header}  \n${remainder}`;
+  }
+
+  return `${header}  \n${entryMatches.join('  \n')}`;
+}
+
 export default function ChatPage() {
   const { id } = useParams();
   const chatId = Array.isArray(id) ? id[0] : id;
@@ -254,7 +280,9 @@ export default function ChatPage() {
                       remarkPlugins={[remarkGfm]}
                       components={{
                         p: ({ children }) => (
-                          <p className='mb-2 last:mb-0'>{children}</p>
+                          <p className='mb-2 last:mb-0 whitespace-pre-wrap'>
+                            {children}
+                          </p>
                         ),
                         ul: ({ children }) => (
                           <ul className='list-disc ml-4 mb-2'>{children}</ul>
@@ -294,7 +322,7 @@ export default function ChatPage() {
                         },
                       }}
                     >
-                      {msg.content}
+                      {normalizePatternMessageForDisplay(msg.content)}
                     </ReactMarkdown>
                   </div>
                 </div>
