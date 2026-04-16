@@ -3,13 +3,86 @@ import dbConnect from '@/lib/db';
 import Chat from '@/models/Chat';
 import Message from '@/models/Message';
 import DataSource from '@/models/DataSource';
-import { getMaifastModel } from '@/lib/gemini';
+import TimeSeriesData from '@/models/TimeSeriesData';
+import {
+  GEMINI_TIMEOUT_MS,
+  getGeminiErrorDetails,
+  getMaifastModel,
+  sleep,
+} from '@/lib/gemini';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { performVectorSearch } from '@/lib/vector-search';
 import { logger } from '@/lib/logger';
+import {
+  buildSheetJson,
+  buildPredictionTrainingContext,
+  extractNumericSequence,
+  findExactSequenceMatches,
+} from '@/lib/time-series';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+
+async function invokeGeminiWithGuardrails<T>(
+  invoke: () => Promise<T>,
+  options: { maxAttempts?: number } = {},
+): Promise<T> {
+  const maxAttempts = options.maxAttempts ?? 2;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await invoke();
+    } catch (error) {
+      lastError = error;
+      const errorDetails = getGeminiErrorDetails(error);
+
+      if (!errorDetails.isRetryable || attempt >= maxAttempts) {
+        throw error;
+      }
+
+      const waitMs = Math.min(errorDetails.retryAfterMs ?? attempt * 1500, 8000);
+      logger.warn('Retrying Gemini request', {
+        attempt,
+        maxAttempts,
+        waitMs,
+        statusCode: errorDetails.statusCode,
+      });
+      await sleep(waitMs);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Gemini invoke failed');
+}
+
+function buildGeminiFallbackMessage(error: unknown): string {
+  const details = getGeminiErrorDetails(error);
+  const retryAfterSeconds = details.retryAfterMs
+    ? Math.max(1, Math.ceil(details.retryAfterMs / 1000))
+    : null;
+
+  if (details.isQuotaExceeded) {
+    return [
+      '**Jawab:** Gemini quota limit hit ho gayi hai, isliye abhi answer generate nahi ho paya.',
+      '',
+      '**Sheet Evidence:** Data process ho gaya tha, lekin Gemini API ne quota/billing related error diya.',
+      '',
+      '**Reason:** Google AI Studio ya billing/quota page check kijiye. Free tier par ho to quota reset ke baad phir try kijiye.',
+    ].join('\n');
+  }
+
+  return [
+    '**Jawab:** Gemini abhi temporary issue de raha hai, isliye response complete nahi ho paya.',
+    '',
+    '**Sheet Evidence:** Request valid thi, lekin Gemini API ne rate limit ya temporary service error return kiya.',
+    '',
+    `**Reason:** ${
+      retryAfterSeconds
+        ? `${retryAfterSeconds} second baad same query phir bhejiye.`
+        : 'Thodi der baad same query phir bhejiye.'
+    }`,
+  ].join('\n');
+}
 
 export async function POST(
   req: Request,
@@ -20,20 +93,29 @@ export async function POST(
     if (!session?.user?.dbId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
     await dbConnect();
     const { id } = await params;
-    const { text: userText } = await req.json();
-
+    const { text } = await req.json();
+    const userText = typeof text === 'string' ? text.trim() : '';
     if (!userText)
       return NextResponse.json(
         { error: 'Message text required' },
         { status: 400 },
       );
-
     const chat = await Chat.findOne({ _id: id, userId: session.user.dbId });
     if (!chat)
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+
+    const latestDataSource = await DataSource.findOne({
+      userId: session.user.dbId,
+    }).sort({ createdAt: -1 });
+
+    if (!latestDataSource) {
+      return NextResponse.json(
+        { error: 'Upload Excel or CSV before sending a query.' },
+        { status: 400 },
+      );
+    }
 
     await Message.create({
       chatId: chat._id,
@@ -41,155 +123,238 @@ export async function POST(
       content: userText,
     });
 
-    const dataSources = await DataSource.find({
+    const allDataSources = await DataSource.find({
       userId: session.user.dbId,
     }).select('name schemaSummary');
-    const schemaMap = dataSources
+    const schemaMap = allDataSources
       .map(
         (s) => `Dataset "${s.name}": ${s.schemaSummary || 'Tabular raw data'}`,
       )
       .join('\n');
+    const historyDocs = await TimeSeriesData.find({
+      userId: session.user.dbId,
+    })
+      .sort({ tag: 1, date: 1 })
+      .select('tag date value -_id');
 
-    let contextString = '';
+    const historyPoints = historyDocs.map((doc) => ({
+      tag: doc.tag,
+      date: doc.date,
+      value: doc.value,
+    }));
+    const querySequence = extractNumericSequence(userText);
+    const sequenceMatches = findExactSequenceMatches(historyPoints, querySequence);
+    const predictionTraining =
+      querySequence.length >= 4
+        ? buildPredictionTrainingContext(historyPoints, querySequence, {
+            maxWindowSize: Math.min(querySequence.length, 6),
+            minWindowSize: 4,
+            maxCandidates: 5,
+            maxEvidencePerCandidate: 4,
+          })
+        : null;
+    const matchedTags = new Set(sequenceMatches.map((match) => match.tag));
+    predictionTraining?.candidates.forEach((candidate) => {
+      candidate.sourceTags.forEach((tag) => matchedTags.add(tag));
+    });
+    const matchedSeriesJson =
+      matchedTags.size > 0
+        ? buildSheetJson(
+            historyPoints.filter((point) => matchedTags.has(point.tag)),
+            { maxPointsPerTag: 60 },
+          )
+        : [];
+    const valueLookup =
+      querySequence.length > 0
+        ? historyPoints
+            .filter((point) => querySequence.includes(point.value))
+            .slice(-40)
+            .map((point) => ({
+              tag: point.tag,
+              date:
+                point.date instanceof Date
+                  ? point.date.toISOString().slice(0, 10)
+                  : point.date,
+              value: point.value,
+            }))
+        : [];
+    const sheetJsonPreview =
+      Array.isArray(latestDataSource.data) && latestDataSource.data.length > 0
+        ? latestDataSource.data
+        : buildSheetJson(historyPoints, { maxPointsPerTag: 25 });
+    let contextString = 'No extra tag-specific context found.';
+    let vectorHints: string[] = [];
+
     try {
       const contextResults = await performVectorSearch(
         userText,
         session.user.dbId,
-        1000, // Limit vector results, we just need to find the relevant TAGS
+        12,
       );
-
-      // Extract relevant TAGS from the context results
-      const relevantTags = new Set<string>();
-
-      // Check vector content for [TAG: XYZ]
-      contextResults.forEach((r: { content: string }) => {
-        const match = r.content.match(/\[TAG:\s*([A-Za-z0-9_-]+)\]/);
-        if (match && match[1]) relevantTags.add(match[1]);
-      });
-
-      // Also check user text for direct implementation of known tags (simple regex for short uppercase codes)
-      // This is a backup if vector search misses it
-      const words = userText
-        .split(/\s+/)
-        .map((w: string) => w.toUpperCase().replace(/[^A-Z0-9]/g, ''));
-      words.forEach((w: string) => {
-        if (w.length >= 2 && w.length <= 5) relevantTags.add(w);
-      });
-
+      vectorHints = contextResults.map((result: { content: string }) => result.content);
       contextString = contextResults
         .map((r: { content: string }) => `- ${r.content}`)
         .join('\n');
-
-      if (relevantTags.size > 0) {
-        // Fetch actual Time Series Data for these tags
-        const TimeSeriesData = (await import('@/models/TimeSeriesData'))
-          .default;
-        const historyDocs = await TimeSeriesData.find({
-          userId: session.user.dbId,
-          tag: { $in: Array.from(relevantTags) },
-        }).sort({ tag: 1, date: 1 });
-
-        if (historyDocs.length > 0) {
-          contextString += '\n\n=== DETAILED TIME-SERIES HISTORY ===\n';
-
-          // Group by tag
-          const groupedArgs: Record<string, string[]> = {};
-          historyDocs.forEach((doc: any) => {
-            if (!groupedArgs[doc.tag]) groupedArgs[doc.tag] = [];
-            groupedArgs[doc.tag].push(
-              `${doc.date.toISOString().slice(0, 10)}: ${doc.value}`,
-            );
-          });
-
-          for (const [tag, values] of Object.entries(groupedArgs)) {
-            contextString += `\n[TAG: ${tag}] History:\n${values.join(' | ')}\n`;
-          }
-        }
-      }
     } catch (vErr) {
-      logger.error('Vector Search failed, using Schema Map only', vErr);
+      logger.error('Vector Search failed, using uploaded sheet JSON only', vErr);
     }
 
     logger.info('RAG CONTEXT RETRIEVED');
 
-    const model = getMaifastModel();
+    const model = getMaifastModel('gemini-2.5-flash', { maxRetries: 0 });
+    const sheetJsonContext = JSON.stringify(
+      {
+        uploadedFile: latestDataSource.name,
+        uploadedSummary: latestDataSource.schemaSummary || '',
+        querySequence,
+        exactSequenceMatches: sequenceMatches,
+        predictionTraining,
+        matchedSeriesJson,
+        valueLookup,
+        sheetJsonPreview,
+        vectorHints,
+      },
+      null,
+      2,
+    );
 
     const prompt = ChatPromptTemplate.fromMessages([
-      'system',
-      `
-        Your internal identity is Maifast, an AI assistant for time-series analysis.
-        The current date and time is {currentDate}.
-        
-        CORE ROLE:
-        1.  **Primary**: Analyze uploaded data to find trends, patterns, and insights.
-        2.  **Secondary**: Assist with general queries if no relevant data is found.
-        3.  **Data Helper**: You are here to HELP with data, not just predict. If data is present, use it to answer the user's question accurately.
-        
-        GREETING RULE:
-        -   If the user says "Hi", "Hello", or similar: Greet back briefly (e.g., "Hello! I'm Maifast.").
-        -   If the user asks a question or gives data: Answer DIRECTLY. DO NOT greet.
-        -   **NEVER** start your response with "I am Maifast" or "I am your AI assistant" unless explicitly asked "Who are you?".
+      [
+        'system',
+        `
+You are a data analysis assistant working strictly with JSON data.
+The current date and time is {currentDate}.
 
-        CRITICAL RULES FOR TIME-SERIES DATA:
-        -   Tags like FB(Faridabad), GB(Gurugram), GL(Ghaziabad), DS(Delhi South) are CATEGORY CODES - treat them as data points.
-        -   **Minimum Input Requirement**: If the user provides a sequence of numbers (e.g., '23, 34, 56') to find a pattern or predict the next number, the sequence **MUST** contain at least four numbers. If they provide fewer than four numbers, do not predict. Instead, politely ask them to provide a sequence of four or more numbers for accurate analysis.
-        -   **Satta/Gambling Queries**: If the user asks about "satta", "betting", or "gambling" numbers IN ANY LANGUAGE (Hindi, English, Hinglish, etc.):
-            -   **DO REFUSE STRICTLY**. Start the response with: "**I cannot assist with gambling activities.**"
-        -   **General Data Queries**: If the user asks for "patterns", "next number", or "analysis" WITHOUT mentioning gambling terms:
-            -   **DO NOT** include disclaimers about gambling.
-            -   **DO NOT** say "this is not a prediction".
-            -   Treat it as a pure statistical question.
-        -   **Prediction**: 
-          -   Provide **ONE CONCRETE** predicted number/value based on the analysis.
-          -   Explain the pattern using **THOROUGH ANALYSIS** (Frequency, Repeating Sequences, Gaps).
-          -   **Prediction Explanation Structure**: When a sequential gap pattern is identified, the explanation **MUST** follow this detailed structure:
-              1.  **Context**: Start by clearly stating the specific tag and the relevant month/year of the historical data being analyzed (e.g., "For the [TAG] in [Month Year]...").
-              2.  **Sequence Identification**: List each number from the user's provided sequence, explicitly stating the number and its corresponding date from the historical data.
-              3.  **Detailed Gap Analysis**: For each pair of consecutive numbers in the identified sequence, explicitly state the count of intermediate numbers and list those intermediate numbers with their dates.
-              4.  **Pattern Summary**: Clearly describe the identified sequential gap pattern (e.g., "an increasing gap of 1, 2, then 3 numbers","an increasing gap of 0, 1, then 2 numbers").
-              5.  **Next Gap Calculation**: State the expected next gap based on the identified pattern.
-              6.  **Prediction Steps**: Explicitly show the counting process for the next predicted number, listing the skipped numbers and their dates based on the calculated gap.
-              7.  **Final Prediction**: Conclude with the single predicted number and the date it appeared in the historical data.
-          -   **DO NOT** use complex arithmetic, digit summing, or modulo math. Keep the *explanation* simple for non-technical users, but the *analysis* should be deep.
+You will receive one JSON object in {sheetJson}. The user will only provide a sequence of numbers.
 
-        -   **Historical Lookup Queries**: If the user asks "When did X appear?" or "X kb aaya tha?":
-            -   Search the provided history for these numbers.
-            -   Present the results in a **Markdown Table**.
-            -   Columns: **Date** | **Number**.
-            -   Use the chronological list in the context to find what came before and after.
-        FORECASTING APPROACH:
-        1.  **Data Handling**: Whenever user pass the four number which is nothing but last four days data so while doing the forecasting make sure to skip this last four days data and then do the analysis.
-        2.  **Gaps/Recency & Sequential Gaps**: 
-            - **Sequential Gaps**: Actively recognize ANY generalized repeating or sequential gap pattern where the user's given sequence is hidden in the historical data. The gap between numbers could be constant (e.g., exactly 2 items between each number), increasing (e.g., 0, 1, 2 items), or following any other recognizable sequence. Do not limit analysis to a single example gap. Find whatever hidden gap pattern in the historical data matches the user's given numbers, and follow that specific gap pattern to predict the next number.
-        3.  **Avoid Technical Jargon**: Do not talk about "modulo" or "arithmetic progressions". Explain the pattern simply (e.g., "I noticed a repeating sequence...").
-        
-        AVAILABLE DATA SOURCES:
-        {schemaMap}
+YOUR TASK:
+- Read the JSON object carefully.
+- Treat each JSON series independently.
+- Work only with the arrays and objects present in the JSON.
+- Use only the JSON fields provided in {sheetJson}.
+- Do not use general knowledge.
+- Do not predict values mathematically.
 
-        TIME-SERIES DATA CONTEXT:
-        {context}
-        
-        INSTRUCTIONS:
-        -   If {context} contains data, USE IT to answer with proper multiple references (It should contains dates and numbers) upto 5.
-        -   If {context} says "No specific data found", answer as a helpful general AI assistant (e.g., "I don't have specific data for that, but generally...").
-        -   Provide clear, direct answers.
-        -   **FORMATTING**: Always use Markdown formatting in your responses. Use bold for emphasis, table for lists of multiple items, and code blocks for data or code.
-      `,
+JSON STRUCTURE:
+- uploadedFile: file name
+- uploadedSummary: short summary of the uploaded file
+- querySequence: numeric sequence extracted from the user input
+- exactSequenceMatches: exact matched windows already found from time-series history
+- predictionTraining: supporting pattern context from history
+- matchedSeriesJson: matched tag series with values and dated points
+- valueLookup: supporting rows where query values appear
+- sheetJsonPreview: main sheet JSON array
+- vectorHints: supporting tag hints only
+
+JSON SERIES RULES:
+- Treat each object inside matchedSeriesJson or sheetJsonPreview as one JSON series.
+- In each series object:
+  - tag = series name
+  - values = values in top-to-bottom order
+  - points = row-aligned dated values in top-to-bottom order
+  - totalPoints = total available values in that series
+- Use matchedSeriesJson first when it contains relevant series for the sequence.
+- If matchedSeriesJson is empty or not enough, use sheetJsonPreview.
+- exactSequenceMatches, predictionTraining, valueLookup, uploadedSummary, and vectorHints are supporting context only.
+- Do not invent series or values outside the JSON.
+
+CORE RULES:
+- Search all provided JSON series across the JSON arrays.
+- Find series where the full sequence exists in the same series in the same top-to-bottom order.
+- The numbers do not need to be on consecutive rows, but they must appear in order.
+- Use 1-based row numbers.
+
+FOR EACH MATCHING SERIES:
+1. Identify the row positions of each number in that series.
+2. Calculate the row gaps between consecutive numbers.
+3. Extend the gap pattern logically for that same series only.
+4. Determine the next row position.
+5. Fetch the value that already exists in that row of the same series.
+
+STRICT CONSTRAINTS:
+- Never generate or predict a new number.
+- If the user provides more than or less then 4 numbers, return exactly: Only 4 sequence numbers are allowed
+- Only return values that already exist in the JSON data.
+- Each JSON series is independent; row-gap patterns may vary by series.
+- Return results for up to 5 matching series only.
+- If more than 5 matches exist, return the first 5 series in the order they appear in the JSON arrays.
+
+VALIDATION RULES:
+- Ensure all sequence values exist in the same JSON series.
+- Ensure row positions are strictly increasing.
+- Ensure the computed next row exists within that series values/points bounds.
+- If the next row is out of bounds, ignore that series.
+
+OUTPUT RULES: 
+- Return plain text only. Do not return JSON.
+- Do not add Markdown, headings, explanations, comments, or extra text.
+- If matches exist, return in this exact dynamic format:
+Ye pattern <actual match count> jgh mila hai : 
+<next row date in readable format> - <next value from JSON> 
+<next row date in readable format> - <next value from JSON>
+- The first line must contain the real number of matched series you are returning.
+- Each line after the first must represent one matched series only.
+- For each matched series, use the date from that series' points array at the computed next row.
+- Format the date in a readable style like: 15th April
+- If a date is unavailable for a matched series, use: Row <next row number> - <next value>
+- Do not include series names, row gaps, row positions, or any extra wording unless the user explicitly asks for them.
+- If no series matches, return exactly: Ye pattern nhi mila
+
+AVAILABLE DATA SOURCES:
+{schemaMap}
+
+UPLOADED SHEET JSON:
+{sheetJson}
+
+EXTRA TIME-SERIES CONTEXT:
+{context}
+        `,
+      ],
       ['human', '{input}'],
     ]);
     const chain = prompt.pipe(model).pipe(new StringOutputParser());
 
-    const aiText = await chain.invoke({
-      company: chat.company,
-      place: chat.place,
-      currentDate: new Date().toLocaleString('en-US', {
-        timeZone: 'Asia/Kolkata',
-      }),
-      schemaMap,
-      context:
-        contextString || 'No specific data found in the Excel for this query.',
-      input: userText,
-    });
+    let aiText: string;
+
+    try {
+      aiText = await invokeGeminiWithGuardrails(
+        () =>
+          chain.invoke(
+            {
+              company: chat.company,
+              place: chat.place,
+              currentDate: new Date().toLocaleString('en-US', {
+                timeZone: 'Asia/Kolkata',
+              }),
+              schemaMap,
+              context: contextString,
+              sheetJson: sheetJsonContext,
+              input: userText,
+            },
+            { timeout: GEMINI_TIMEOUT_MS },
+          ),
+        { maxAttempts: 2 },
+      );
+    } catch (modelError) {
+      const errorDetails = getGeminiErrorDetails(modelError);
+      logger.error('Gemini message generation failed', modelError, errorDetails);
+
+      const assistantMsg = await Message.create({
+        chatId: chat._id,
+        role: 'assistant',
+        content: buildGeminiFallbackMessage(modelError),
+        type: 'text',
+        metadata: {
+          provider: 'gemini',
+          providerError: true,
+          statusCode: errorDetails.statusCode,
+          retryAfterMs: errorDetails.retryAfterMs,
+          isQuotaExceeded: errorDetails.isQuotaExceeded,
+        },
+      });
+
+      return NextResponse.json(assistantMsg);
+    }
 
     const finalResponse = aiText;
     const type = 'text';
@@ -216,7 +381,14 @@ export async function POST(
         const titleChain = titlePrompt
           .pipe(model)
           .pipe(new StringOutputParser());
-        const generatedTitle = await titleChain.invoke({ input: userText });
+        const generatedTitle = await invokeGeminiWithGuardrails(
+          () =>
+            titleChain.invoke(
+              { input: userText },
+              { timeout: Math.min(GEMINI_TIMEOUT_MS, 15000) },
+            ),
+          { maxAttempts: 1 },
+        );
 
         if (generatedTitle && generatedTitle.length < 50) {
           await Chat.findByIdAndUpdate(chat._id, {

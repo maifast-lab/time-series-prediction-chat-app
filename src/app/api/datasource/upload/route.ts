@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth';
 import dbConnect from '@/lib/db';
 import { getBatchEmbeddings } from '@/lib/gemini';
 import { logger } from '@/lib/logger';
+import { buildSheetJson } from '@/lib/time-series';
 import DataSource from '@/models/DataSource';
 import VectorData, { IVectorData } from '@/models/VectorData';
 import TimeSeriesData from '@/models/TimeSeriesData';
@@ -26,7 +27,7 @@ const MONTH_MAP: Record<string, number> = {
   APRIL: 4,
   APRI: 4,
   MAY: 5,
-  JUN: 6,
+  JUN: 6, 
   JUNE: 6,
   JUL: 7,
   JULY: 7,
@@ -55,11 +56,9 @@ function isMonth(value: unknown): boolean {
   if (typeof value !== 'string') return false;
   return MONTH_MAP[value.toUpperCase()] !== undefined;
 }
-
 function getMonthNumber(value: string): number {
   return MONTH_MAP[value.toUpperCase()] || 1;
 }
-
 interface ParsedPoint {
   date: Date;
   tag: string;
@@ -70,7 +69,7 @@ interface ParsedPoint {
  * Method: parseMyExcel (Logic from test-method1.cjs)
  * Row 0: Year (sparse, filled backwards), Row 1: Month (sparse, filled backwards), Row 2: Tag
  */
-function parseMyExcel(grid: any[][]): ParsedPoint[] {
+function parseMyExcel(grid: unknown[][]): ParsedPoint[] {
   const points: ParsedPoint[] = [];
 
   if (!grid || grid.length < 3) return points;
@@ -157,7 +156,7 @@ function parseMyExcel(grid: any[][]): ParsedPoint[] {
           });
         }
       } catch (e) {
-        // ignore invalid dates
+        console.warn(`Skipping invalid date for Year: ${yearVal}, Month: ${monthVal}, Day: ${day}`);
       }
     }
   }
@@ -173,12 +172,12 @@ function parseMyExcel(grid: any[][]): ParsedPoint[] {
  * 1. Find a column or row that looks like Dates.
  * 2. Treat other columns/rows as Tags.
  */
-function parseDynamicExcel(grid: any[][]): ParsedPoint[] {
+function parseDynamicExcel(grid: unknown[][]): ParsedPoint[] {
   const points: ParsedPoint[] = [];
   if (!grid || grid.length < 2) return points;
 
   // Function to check if a value is a date-like string or number
-  const isDateLike = (val: any): boolean => {
+  const isDateLike = (val: unknown): boolean => {
     if (val instanceof Date) return true;
     if (typeof val === 'number' && val > 20000 && val < 60000) return true; // Excel serial dates
     if (typeof val === 'string' && val.length > 5 && !isNaN(Date.parse(val)))
@@ -219,15 +218,19 @@ function parseDynamicExcel(grid: any[][]): ParsedPoint[] {
       const row = grid[i];
       if (!row || row.length <= dateColIdx) continue;
 
-      let dateVal = row[dateColIdx];
+      const dateVal = row[dateColIdx];
       let date: Date | null = null;
 
       try {
         if (typeof dateVal === 'number') {
           // Excel serial date to JS Date
           date = new Date(Math.round((dateVal - 25569) * 86400 * 1000));
-        } else {
+        } else if (dateVal instanceof Date) {
           date = new Date(dateVal);
+        } else if (typeof dateVal === 'string') {
+          date = new Date(dateVal);
+        } else {
+          continue;
         }
       } catch {
         continue;
@@ -266,17 +269,15 @@ export async function POST(req: Request) {
     if (!session?.user?.dbId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
     await dbConnect();
     const formData = await req.formData();
     const file = formData.get('file') as File;
-
     if (!file)
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
 
     // Clean up old data
     const existingDataSources = await DataSource.find({
-      userId: session.user.dbId,
+      userId: session.user.dbId,  
     });
     const dataSourceIds = existingDataSources.map((ds) => ds._id);
     if (dataSourceIds.length > 0) {
@@ -297,10 +298,9 @@ export async function POST(req: Request) {
         const data = xlsx.utils.sheet_to_json(sheet, {
           header: 1,
           defval: null,
-        }) as any[][];
-
+        }) as unknown[][];
         const points = parseMyExcel(data);
-
+        console.log(`Sheet "${sheetName}" parsed with ${data} points using parseMyExcel.`);
         if (points.length > 0) {
           allPoints = allPoints.concat(points);
         } else {
@@ -323,12 +323,17 @@ export async function POST(req: Request) {
       );
     }
 
+    const sheetJsonPreview = buildSheetJson(allPoints, {
+      maxPointsPerTag: 25,
+    });
+    const uniqueTags = [...new Set(allPoints.map((p) => p.tag))];
+
     const dataSource = await DataSource.create({
       userId: session.user.dbId,
       name: file.name,
       sourceType: 'time-series',
-      data: [], // Don't store huge raw data in DataSource anymore
-      schemaSummary: `Parsed ${allPoints.length} points. Tags: ${[...new Set(allPoints.map((p) => p.tag))].join(', ')}`,
+      data: sheetJsonPreview,
+      schemaSummary: `Parsed ${allPoints.length} points across ${uniqueTags.length} tags. Tags: ${uniqueTags.join(', ')}`,
     });
 
     // Bulk write TimeSeriesData
@@ -347,7 +352,7 @@ export async function POST(req: Request) {
 
     // Generate Tag Summaries for Vector Search
     // We still want vector search to find *relevant tags* even if it doesn't return the data points
-    const tags = [...new Set(allPoints.map((p) => p.tag))];
+    const tags = uniqueTags;
     const vectorDocs: Partial<IVectorData>[] = [];
 
     for (const tag of tags) {
@@ -375,6 +380,7 @@ export async function POST(req: Request) {
       message: 'Success',
       points: allPoints.length,
       tags: tags.length,
+      sheetJsonPreview,
     });
   } catch (e) {
     logger.error('Upload failed', e);
