@@ -56,7 +56,7 @@ export default function LoginPage() {
           </div>
           <p className='text-gray-400 text-center'>
             Log in to access your personal AI assistant and custom data
-            insights.
+            insights.dsf
           </p>
         </div>
 
