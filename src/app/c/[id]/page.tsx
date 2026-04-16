@@ -31,11 +31,25 @@ export default function ChatPage() {
   const [hasGlobalData, setHasGlobalData] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
+  const [composerNotice, setComposerNotice] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const hasAnyData = hasGlobalData;
+
+  async function refreshChatState() {
+    try {
+      const res = await fetch(`/api/chat/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setChat(data.chat);
+        setHasGlobalData(data.hasGlobalData);
+      }
+    } catch (e) {
+      logger.error('Failed to fetch data', e);
+    }
+  }
 
   useEffect(() => {
     if (!isResponding && !loading) {
@@ -44,19 +58,6 @@ export default function ChatPage() {
   }, [isResponding, loading]);
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch(`/api/chat/${id}`);
-        if (res.ok) {
-          const data = await res.json();
-          setChat(data.chat);
-          setHasGlobalData(data.hasGlobalData);
-        }
-      } catch (e) {
-        logger.error('Failed to fetch data', e);
-      }
-    }
-
     async function fetchMessages() {
       try {
         const res = await fetch(`/api/chat/${id}/messages`);
@@ -69,7 +70,7 @@ export default function ChatPage() {
       }
     }
 
-    fetchData();
+    refreshChatState();
     fetchMessages();
   }, [id]);
 
@@ -77,39 +78,34 @@ export default function ChatPage() {
     scrollToBottom();
   }, [chatMessages]);
 
+  useEffect(() => {
+    const handleDataUpload = () => {
+      refreshChatState();
+      setComposerNotice('');
+    };
+
+    window.addEventListener('datasource-uploaded', handleDataUpload);
+    return () =>
+      window.removeEventListener('datasource-uploaded', handleDataUpload);
+  }, [id]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  async function fetchData() {
-    try {
-      const res = await fetch(`/api/chat/${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setChat(data.chat);
-        setHasGlobalData(data.hasGlobalData);
-        window.dispatchEvent(new Event('chat-updated'));
-      }
-    } catch (e) {
-      logger.error('Failed to fetch data', e);
-    }
-  }
-
-  async function fetchMessages() {
-    try {
-      const res = await fetch(`/api/chat/${id}/messages`);
-      if (res.ok) {
-        setChatMessages(await res.json());
-      }
-      setLoading(false);
-    } catch {
-      logger.error('Failed to fetch messages');
-    }
-  }
 
   async function handleSendMessage(e: React.FormEvent) {
     e.preventDefault();
-    const userText = inputText;
+    const userText = inputText.trim();
+    if (!userText) return;
+    if (!hasAnyData) {
+      setComposerNotice(
+        'Pehle Excel ya CSV upload kijiye. Upload ke baad hi query bhej sakte hain.',
+      );
+      return;
+    }
+
+    setComposerNotice('');
     setInputText('');
     setIsResponding(true);
 
@@ -133,11 +129,14 @@ export default function ChatPage() {
         setChatMessages((prev) => [...prev, newMessage]);
         // Refresh chat details if the title was "New Chat" to show the generated title
         if (chat?.company === 'New Chat') {
-          fetchData();
+          refreshChatState();
         }
       } else {
         const errorData = await res.json().catch(() => ({}));
         logger.error('API Error', errorData);
+        if (errorData.error) {
+          setComposerNotice(errorData.error);
+        }
         setChatMessages((prev) => [
           ...prev,
           {
@@ -202,11 +201,11 @@ export default function ChatPage() {
                   <Lock className='w-8 h-8 text-blue-400' />
                 </div>
                 <h2 className='text-lg font-bold text-white mb-2'>
-                  Ready for your data
+                  Upload required
                 </h2>
                 <p className='text-sm text-gray-500 mb-6'>
-                  Upload a document in the sidebar to give me some context, or
-                  just start chatting!
+                  Sidebar se Excel ya CSV upload kijiye. Upload hone ke baad hi
+                  query send kar sakte hain.
                 </p>
               </motion.div>
             )}
@@ -320,22 +319,28 @@ export default function ChatPage() {
               type='text'
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              disabled={isResponding}
+              disabled={isResponding || !hasAnyData}
               placeholder={
                 hasAnyData
-                  ? 'Ask me anything about your data...'
-                  : 'Chat with Maifast...'
+                  ? 'Sheet ke hisab se apna sawal poochiye...'
+                  : 'Upload Excel/CSV first to unlock chat...'
               }
               className='w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-6 pr-14 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all backdrop-blur-xl'
             />
             <button
               type='submit'
-              disabled={!inputText.trim() || isResponding}
-              className='absolute right-2 top-2 p-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-all disabled:opacity-0 disabled:pointer-events-none'
+              disabled={!inputText.trim() || isResponding || !hasAnyData}
+              className='absolute right-2 top-2 p-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed'
             >
               <Sparkles className='w-4 h-4' />
             </button>
           </form>
+          <p className='max-w-4xl mx-auto mt-3 px-1 text-xs text-gray-500'>
+            {composerNotice ||
+              (hasAnyData
+                ? 'Uploaded sheet ke basis par jawab diya jayega.'
+                : 'Upload ke bina query send nahi hogi. Pehle sidebar se sheet upload kijiye.')}
+          </p>
         </div>
       </div>
     </MainLayout>

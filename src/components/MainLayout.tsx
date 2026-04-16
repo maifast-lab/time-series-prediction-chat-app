@@ -1,5 +1,4 @@
 'use client';
-
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
@@ -18,14 +17,12 @@ import { logger } from '@/lib/logger';
 import { useSession, signIn, signOut } from 'next-auth/react';
 import Image from 'next/image';
 import logoImg from '@/app/logo.jpg';
-
 interface ChatSummary {
   _id: string;
   company: string;
   place: string;
   createdAt: string;
 }
-
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -34,21 +31,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   >('idle');
   const [progressMsg, setProgressMsg] = useState('');
   const { data: session } = useSession();
-
   const router = useRouter();
   const params = useParams();
-
-  useEffect(() => {
-    fetchChats();
-  }, [params]);
-
-  useEffect(() => {
-    const handleUpdate = () => fetchChats();
-    window.addEventListener('chat-updated', handleUpdate);
-    return () => window.removeEventListener('chat-updated', handleUpdate);
-  }, []);
-
-  async function fetchChats() {
+  const fetchChats = async () => {
     try {
       const res = await fetch('/api/chat');
       if (res.ok) {
@@ -59,6 +44,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       logger.error('Failed to fetch chats', e);
     }
   }
+  useEffect(() => {
+    const loadChats = async () => {
+      await fetchChats();
+    };
+    loadChats();
+  }, [params]);
+  useEffect(() => {
+    const handleUpdate = () => fetchChats();
+    window.addEventListener('chat-updated', handleUpdate);
+    return () => window.removeEventListener('chat-updated', handleUpdate);
+  }, []);
 
   async function handleDelete(e: React.MouseEvent, chatId: string) {
     e.stopPropagation();
@@ -78,23 +74,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       logger.error('Delete failed', error);
     }
   }
-
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploadStep('analyzing');
     setProgressMsg('AI is analyzing format...');
 
     const formData = new FormData();
     formData.append('file', file);
-
     try {
       const res = await fetch('/api/datasource/upload', {
         method: 'POST',
         body: formData,
       });
-
       if (res.ok) {
         setUploadStep('processing');
         setProgressMsg('Bulk mapping 100% complete...');
@@ -103,6 +95,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           setProgressMsg('Data ready for AI chat!');
           setTimeout(() => setUploadStep('idle'), 3000);
           fetchChats();
+          window.dispatchEvent(new Event('datasource-uploaded'));
         }, 800);
       } else {
         const errData = await res.json().catch(() => ({}));
@@ -114,9 +107,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       setUploadStep('error');
       setProgressMsg('Network error.');
       setTimeout(() => setUploadStep('idle'), 3000);
+    } finally {
+      e.target.value = '';
     }
   }
-
   return (
     <div className='flex h-screen w-full bg-[#0a0f1e] text-gray-100 overflow-hidden font-sans selection:bg-blue-500/30'>
       <button
@@ -129,7 +123,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <ChevronRight className='w-5 h-5' />
         )}
       </button>
-
       <AnimatePresence mode='wait'>
         {isSidebarOpen && (
           <>
@@ -156,7 +149,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     Maifast
                   </span>
                 </div>
-
                 <button
                   onClick={async () => {
                     try {
@@ -218,6 +210,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     <Upload className='w-3 h-3' />
                     <input
                       type='file'
+                      accept='.xlsx,.xls,.csv'
                       className='hidden'
                       onChange={handleFileUpload}
                     />
@@ -266,7 +259,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </div>
                   ) : (
                     <p className='text-[10px] text-gray-500 px-3 leading-relaxed'>
-                      Upload documents to chat with your private data.
+                      Upload Excel or CSV first. Chat stays locked until sheet
+                      data is ready.
                     </p>
                   )}
                 </div>
@@ -320,7 +314,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </>
         )}
       </AnimatePresence>
-
       <div className='flex-1 flex flex-col h-full relative w-full overflow-hidden'>
         {!isSidebarOpen && (
           <button
