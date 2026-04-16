@@ -33,6 +33,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const router = useRouter();
   const params = useParams();
+  const activeChatId =
+    typeof params?.id === 'string'
+      ? params.id
+      : Array.isArray(params?.id)
+        ? params.id[0]
+        : null;
   const fetchChats = async () => {
     try {
       const res = await fetch('/api/chat');
@@ -49,7 +55,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       await fetchChats();
     };
     loadChats();
-  }, [params]);
+  }, [activeChatId]);
   useEffect(() => {
     const handleUpdate = () => fetchChats();
     window.addEventListener('chat-updated', handleUpdate);
@@ -66,7 +72,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       });
       if (res.ok) {
         fetchChats();
-        if (params?.id === chatId) {
+        if (activeChatId === chatId) {
           router.push('/');
         }
       }
@@ -82,6 +88,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     const formData = new FormData();
     formData.append('file', file);
+    if (activeChatId) {
+      formData.append('chatId', activeChatId);
+    }
     try {
       const res = await fetch('/api/datasource/upload', {
         method: 'POST',
@@ -92,7 +101,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         setProgressMsg('Bulk mapping 100% complete...');
         setTimeout(() => {
           setUploadStep('success');
-          setProgressMsg('Data ready for AI chat!');
+          setProgressMsg(
+            activeChatId
+              ? `${file.name} is now linked to this chat.`
+              : `${file.name} is ready for AI chat.`,
+          );
           setTimeout(() => setUploadStep('idle'), 3000);
           fetchChats();
           window.dispatchEvent(new Event('datasource-uploaded'));
@@ -178,7 +191,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     key={chat._id}
                     className={cn(
                       'group flex items-center gap-3 px-3 py-3 rounded-xl text-sm transition-all relative overflow-hidden cursor-pointer mx-1',
-                      params?.id === chat._id
+                      activeChatId === chat._id
                         ? 'bg-blue-600/10 text-white border border-blue-500/20'
                         : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent',
                     )}
@@ -270,6 +283,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <div className='flex items-center justify-between px-2'>
                   <div className='flex items-center gap-3'>
                     {session?.user?.image ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
                       <img
                         src={session.user.image}
                         alt='User'

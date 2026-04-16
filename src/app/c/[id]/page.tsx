@@ -1,6 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type ComponentPropsWithoutRef,
+} from 'react';
 import { useParams } from 'next/navigation';
 import MainLayout from '@/components/MainLayout';
 import { Sparkles, Loader2, Lock } from 'lucide-react';
@@ -23,12 +29,18 @@ interface Message {
   createdAt: string;
 }
 
+type MarkdownCodeProps = ComponentPropsWithoutRef<'code'> & {
+  inline?: boolean;
+};
+
 export default function ChatPage() {
   const { id } = useParams();
+  const chatId = Array.isArray(id) ? id[0] : id;
   const [chat, setChat] = useState<ChatDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [isResponding, setIsResponding] = useState(false);
-  const [hasGlobalData, setHasGlobalData] = useState(false);
+  const [hasUploadedData, setHasUploadedData] = useState(false);
+  const [activeDataSourceName, setActiveDataSourceName] = useState('');
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [composerNotice, setComposerNotice] = useState('');
@@ -36,20 +48,22 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const hasAnyData = hasGlobalData;
+  const hasAnyData = hasUploadedData;
 
-  async function refreshChatState() {
+  const refreshChatState = useCallback(async () => {
+    if (!chatId) return;
     try {
-      const res = await fetch(`/api/chat/${id}`);
+      const res = await fetch(`/api/chat/${chatId}`);
       if (res.ok) {
         const data = await res.json();
         setChat(data.chat);
-        setHasGlobalData(data.hasGlobalData);
+        setHasUploadedData(data.hasGlobalData);
+        setActiveDataSourceName(data.activeDataSourceName || '');
       }
     } catch (e) {
       logger.error('Failed to fetch data', e);
     }
-  }
+  }, [chatId]);
 
   useEffect(() => {
     if (!isResponding && !loading) {
@@ -58,9 +72,11 @@ export default function ChatPage() {
   }, [isResponding, loading]);
 
   useEffect(() => {
+    if (!chatId) return;
+
     async function fetchMessages() {
       try {
-        const res = await fetch(`/api/chat/${id}/messages`);
+        const res = await fetch(`/api/chat/${chatId}/messages`);
         if (res.ok) {
           setChatMessages(await res.json());
         }
@@ -72,7 +88,7 @@ export default function ChatPage() {
 
     refreshChatState();
     fetchMessages();
-  }, [id]);
+  }, [chatId, refreshChatState]);
 
   useEffect(() => {
     scrollToBottom();
@@ -87,7 +103,7 @@ export default function ChatPage() {
     window.addEventListener('datasource-uploaded', handleDataUpload);
     return () =>
       window.removeEventListener('datasource-uploaded', handleDataUpload);
-  }, [id]);
+  }, [chatId, refreshChatState]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -118,7 +134,7 @@ export default function ChatPage() {
     setChatMessages((prev) => [...prev, userMsg]);
 
     try {
-      const res = await fetch(`/api/chat/${id}/message`, {
+      const res = await fetch(`/api/chat/${chatId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: userText }),
@@ -204,8 +220,8 @@ export default function ChatPage() {
                   Upload required
                 </h2>
                 <p className='text-sm text-gray-500 mb-6'>
-                  Sidebar se Excel ya CSV upload kijiye. Upload hone ke baad hi
-                  query send kar sakte hain.
+                  Sidebar se Excel ya CSV upload kijiye. Upload hone ke baad
+                  yahi chat refresh ke baad bhi wahi file use karegi.
                 </p>
               </motion.div>
             )}
@@ -254,8 +270,7 @@ export default function ChatPage() {
                           className,
                           children,
                           ...props
-                        }: any) => {
-                          const match = /language-(\w+)/.exec(className || '');
+                        }: MarkdownCodeProps) => {
                           return !inline ? (
                             <div className='rounded-lg bg-black/30 border border-white/10 p-3 my-2 overflow-x-auto'>
                               <code
@@ -338,7 +353,9 @@ export default function ChatPage() {
           <p className='max-w-4xl mx-auto mt-3 px-1 text-xs text-gray-500'>
             {composerNotice ||
               (hasAnyData
-                ? 'Uploaded sheet ke basis par jawab diya jayega.'
+                ? activeDataSourceName
+                  ? `Active Excel: ${activeDataSourceName}. Uploaded sheet ke basis par jawab diya jayega.`
+                  : 'Uploaded sheet ke basis par jawab diya jayega.'
                 : 'Upload ke bina query send nahi hogi. Pehle sidebar se sheet upload kijiye.')}
           </p>
         </div>

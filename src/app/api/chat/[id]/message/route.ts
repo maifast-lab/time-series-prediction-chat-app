@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Chat from '@/models/Chat';
 import Message from '@/models/Message';
-import DataSource from '@/models/DataSource';
 import TimeSeriesData from '@/models/TimeSeriesData';
 import {
   GEMINI_TIMEOUT_MS,
@@ -10,6 +9,7 @@ import {
   getMaifastModel,
   sleep,
 } from '@/lib/gemini';
+import { resolveChatDataSource } from '@/lib/chat-data-source';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { StringOutputParser } from '@langchain/core/output_parsers';
 import { performVectorSearch } from '@/lib/vector-search';
@@ -106,11 +106,13 @@ export async function POST(
     if (!chat)
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
 
-    const latestDataSource = await DataSource.findOne({
+    const activeDataSource = await resolveChatDataSource({
       userId: session.user.dbId,
-    }).sort({ createdAt: -1 });
+      chatId: String(chat._id),
+      dataSourceId: chat.dataSourceId?.toString(),
+    });
 
-    if (!latestDataSource) {
+    if (!activeDataSource) {
       return NextResponse.json(
         { error: 'Upload Excel or CSV before sending a query.' },
         { status: 400 },
@@ -123,16 +125,11 @@ export async function POST(
       content: userText,
     });
 
-    const allDataSources = await DataSource.find({
-      userId: session.user.dbId,
-    }).select('name schemaSummary');
-    const schemaMap = allDataSources
-      .map(
-        (s) => `Dataset "${s.name}": ${s.schemaSummary || 'Tabular raw data'}`,
-      )
-      .join('\n');
+    const schemaMap = `Dataset "${activeDataSource.name}": ${
+      activeDataSource.schemaSummary || 'Tabular raw data'
+    }`;
     const historyDocs = await TimeSeriesData.find({
-      userId: session.user.dbId,
+      dataSourceId: activeDataSource._id,
     })
       .sort({ tag: 1, date: 1 })
       .select('tag date value -_id');
@@ -179,8 +176,8 @@ export async function POST(
             }))
         : [];
     const sheetJsonPreview =
-      Array.isArray(latestDataSource.data) && latestDataSource.data.length > 0
-        ? latestDataSource.data
+      Array.isArray(activeDataSource.data) && activeDataSource.data.length > 0
+        ? activeDataSource.data
         : buildSheetJson(historyPoints, { maxPointsPerTag: 25 });
     let contextString = 'No extra tag-specific context found.';
     let vectorHints: string[] = [];
@@ -190,6 +187,12 @@ export async function POST(
         userText,
         session.user.dbId,
         12,
+        {
+          dataSourceId: String(activeDataSource._id),
+          ...(activeDataSource.chatId
+            ? { chatId: String(activeDataSource.chatId) }
+            : {}),
+        },
       );
       vectorHints = contextResults.map((result: { content: string }) => result.content);
       contextString = contextResults
@@ -204,8 +207,8 @@ export async function POST(
     const model = getMaifastModel('gemini-2.5-flash', { maxRetries: 0 });
     const sheetJsonContext = JSON.stringify(
       {
-        uploadedFile: latestDataSource.name,
-        uploadedSummary: latestDataSource.schemaSummary || '',
+        uploadedFile: activeDataSource.name,
+        uploadedSummary: activeDataSource.schemaSummary || '',
         querySequence,
         exactSequenceMatches: sequenceMatches,
         predictionTraining,

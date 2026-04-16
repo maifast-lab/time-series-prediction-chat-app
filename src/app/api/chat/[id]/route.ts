@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Chat from '@/models/Chat';
-import DataSource from '@/models/DataSource';
-import VectorData from '@/models/VectorData';
+import { resolveChatDataSource } from '@/lib/chat-data-source';
 import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -26,11 +25,16 @@ export async function GET(
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
     }
 
-    const hasData = await DataSource.exists({ userId: session.user.dbId });
+    const activeDataSource = await resolveChatDataSource({
+      userId: session.user.dbId,
+      chatId: String(chat._id),
+      dataSourceId: chat.dataSourceId?.toString(),
+    });
 
     return NextResponse.json({
       chat,
-      hasGlobalData: !!hasData,
+      hasGlobalData: !!activeDataSource,
+      activeDataSourceName: activeDataSource?.name || null,
     });
   } catch (error) {
     logger.error('Get Chat Error', error);

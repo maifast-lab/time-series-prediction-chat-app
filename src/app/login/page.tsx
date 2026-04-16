@@ -9,7 +9,7 @@ import Image from "next/image";
 import logoImg from "../logo.jpg";
 
 export default function LoginPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const [providerIds, setProviderIds] = useState<string[]>([]);
 
@@ -68,6 +68,7 @@ export default function LoginPage() {
             onClick={() => signIn("google", { callbackUrl: "/" })}
             className="w-full group relative flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-white text-[#0a0f1e] font-bold text-lg hover:bg-gray-100 transition-all duration-300 shadow-xl"
           >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
               alt="Google"

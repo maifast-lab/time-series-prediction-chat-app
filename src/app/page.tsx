@@ -24,7 +24,7 @@ export default function Home() {
             setLoading(false);
           }
         }
-      } catch (e) {
+      } catch {
         setLoading(false);
       }
     }

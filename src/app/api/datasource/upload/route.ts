@@ -4,10 +4,12 @@ import mongoose from 'mongoose';
 import * as xlsx from 'xlsx';
 
 import { authOptions } from '@/lib/auth';
+import { buildUploadCleanupFilter } from '@/lib/chat-data-source';
 import dbConnect from '@/lib/db';
 import { getBatchEmbeddings } from '@/lib/gemini';
 import { logger } from '@/lib/logger';
 import { buildSheetJson } from '@/lib/time-series';
+import Chat from '@/models/Chat';
 import DataSource from '@/models/DataSource';
 import VectorData, { IVectorData } from '@/models/VectorData';
 import TimeSeriesData from '@/models/TimeSeriesData';
@@ -155,7 +157,7 @@ function parseMyExcel(grid: unknown[][]): ParsedPoint[] {
             value: Number(val),
           });
         }
-      } catch (e) {
+      } catch {
         console.warn(`Skipping invalid date for Year: ${yearVal}, Month: ${monthVal}, Day: ${day}`);
       }
     }
@@ -274,16 +276,23 @@ export async function POST(req: Request) {
     const file = formData.get('file') as File;
     if (!file)
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+    const chatIdValue = formData.get('chatId');
+    const chatId =
+      typeof chatIdValue === 'string' && mongoose.Types.ObjectId.isValid(chatIdValue)
+        ? chatIdValue
+        : null;
+    let chat = null;
 
-    // Clean up old data
-    const existingDataSources = await DataSource.find({
-      userId: session.user.dbId,  
-    });
-    const dataSourceIds = existingDataSources.map((ds) => ds._id);
-    if (dataSourceIds.length > 0) {
-      await VectorData.deleteMany({ dataSourceId: { $in: dataSourceIds } });
-      await DataSource.deleteMany({ userId: session.user.dbId });
-      await TimeSeriesData.deleteMany({ userId: session.user.dbId }); // Also clean TS data
+    if (chatId) {
+      chat = await Chat.findOne({
+        _id: chatId,
+        userId: session.user.dbId,
+        isDeleted: { $ne: true },
+      }).select('_id dataSourceId');
+
+      if (!chat) {
+        return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+      }
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -323,6 +332,15 @@ export async function POST(req: Request) {
       );
     }
 
+    // Replace only the datasource for the current chat after the new file parses.
+    const existingDataSources = await DataSource.find(
+      buildUploadCleanupFilter(session.user.dbId, chatId),
+    ).select('_id');
+    const dataSourceIds = new Set(existingDataSources.map((ds) => String(ds._id)));
+    if (chat?.dataSourceId) {
+      dataSourceIds.add(String(chat.dataSourceId));
+    }
+    const dataSourceIdsToDelete = Array.from(dataSourceIds);
     const sheetJsonPreview = buildSheetJson(allPoints, {
       maxPointsPerTag: 25,
     });
@@ -330,6 +348,7 @@ export async function POST(req: Request) {
 
     const dataSource = await DataSource.create({
       userId: session.user.dbId,
+      ...(chat ? { chatId: chat._id } : {}),
       name: file.name,
       sourceType: 'time-series',
       data: sheetJsonPreview,
@@ -366,6 +385,7 @@ export async function POST(req: Request) {
 
       vectorDocs.push({
         userId: new mongoose.Types.ObjectId(session.user.dbId),
+        ...(chat ? { chatId: chat._id as mongoose.Types.ObjectId } : {}),
         dataSourceId: dataSource._id as mongoose.Types.ObjectId,
         content: summary,
         embedding: embedding,
@@ -376,8 +396,28 @@ export async function POST(req: Request) {
       await VectorData.insertMany(vectorDocs);
     }
 
+    if (dataSourceIdsToDelete.length > 0) {
+      await VectorData.deleteMany({
+        dataSourceId: { $in: dataSourceIdsToDelete },
+      });
+      await DataSource.deleteMany({ _id: { $in: dataSourceIdsToDelete } });
+      await TimeSeriesData.deleteMany({
+        dataSourceId: { $in: dataSourceIdsToDelete },
+      });
+    }
+
+    if (chat) {
+      await Chat.updateOne(
+        { _id: chat._id, userId: session.user.dbId },
+        { $set: { dataSourceId: dataSource._id } },
+      );
+    }
+
     return NextResponse.json({
       message: 'Success',
+      chatId,
+      dataSourceId: dataSource._id,
+      fileName: dataSource.name,
       points: allPoints.length,
       tags: tags.length,
       sheetJsonPreview,

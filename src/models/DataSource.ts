@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IDataSource extends Document {
   userId: mongoose.Types.ObjectId;
+  chatId?: mongoose.Types.ObjectId;
   name: string;
   sourceType: string;
   data: unknown[];
@@ -12,6 +13,7 @@ export interface IDataSource extends Document {
 const DataSourceSchema = new Schema<IDataSource>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    chatId: { type: Schema.Types.ObjectId, ref: 'Chat' },
     name: { type: String, required: true },
     sourceType: { type: String, required: true },
     data: [{ type: Schema.Types.Mixed }],
