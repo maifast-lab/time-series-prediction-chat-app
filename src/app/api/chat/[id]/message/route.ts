@@ -285,7 +285,7 @@ VALIDATION RULES:
 - Ensure the computed next row exists within that series values/points bounds.
 - If the next row is out of bounds, ignore that series.
 
-OUTPUT RULES:
+OUTPUT RULES: 
 - Return plain text only. Do not return JSON.
 - Do not add Markdown, headings, explanations, comments, or extra text.
 - If matches exist, return in this exact dynamic format:
