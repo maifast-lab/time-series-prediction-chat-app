@@ -276,7 +276,7 @@ FOR EACH MATCHING SERIES:
 
 STRICT CONSTRAINTS:
 - Never generate or predict a new number.
-- If the user provides more than or less then 4 numbers, return exactly: Only 4 sequence numbers are allowed
+- If the user provides more than or less then 4 numbers, return exactly: Exactly 4 numbers provide karo.
 - Only return values that already exist in the JSON data.
 - Each JSON series is independent; row-gap patterns may vary by series.
 - Return results for up to 5 matching series only.
