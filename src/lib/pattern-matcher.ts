@@ -427,14 +427,14 @@ export function buildPatternAnswer(
   if (matches.length === 0) {
     return options.phrases?.noMatch?.trim() || "Ye pattern nhi mila";
   }
-
+  console.log(matches , options);
   const visibleMatches = [...matches]
-    .sort(
-      (left, right) =>
-        left.nextPoint.date.getTime() - right.nextPoint.date.getTime() ||
-        left.tag.localeCompare(right.tag) ||
-        left.nextRow - right.nextRow,
-    )
+    // .sort(
+    //   (left, right) =>
+    //     left.nextPoint.date.getTime() - right.nextPoint.date.getTime() ||
+    //     left.tag.localeCompare(right.tag) ||
+    //     left.nextRow - right.nextRow,
+    // )
     .slice(0, 5);
   const lines = visibleMatches.map((match) => {
     const label = formatPointLabel(

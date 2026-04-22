@@ -20,6 +20,7 @@ import {
 import Chat from "@/models/Chat";
 import Message from "@/models/Message";
 import TimeSeriesData from "@/models/TimeSeriesData";
+import { se } from "date-fns/locale";
 
 type ActiveDataSource = Awaited<ReturnType<typeof resolveChatDataSource>>;
 type ResolvedDataSource = NonNullable<ActiveDataSource>;
@@ -69,10 +70,9 @@ async function findMatchesForDataSource(options: {
     return findPatternMatches(
       buildReadableDataHistoryPoints(dataSource.data),
       sequence,
-    );
+    ).reverse();
   }
-
-  return findPatternMatches(await getStoredHistoryPoints(dataSource), sequence);
+  return findPatternMatches(await getStoredHistoryPoints(dataSource), sequence).reverse();
 }
 
 async function createAssistantMessage(options: {
@@ -161,11 +161,11 @@ export async function POST(
           isRowGridSource: rowGrid,
           phrases: routeDecision.patternAnswer,
         });
+        console.log(finalResponse);
       }
     } catch (geminiError) {
       const errorDetails = getGeminiErrorDetails(geminiError);
       logger.error("Gemini route decision failed", geminiError, errorDetails);
-
       metadata.provider = "gemini-router";
       metadata.providerError = true;
       metadata.statusCode = errorDetails.statusCode;

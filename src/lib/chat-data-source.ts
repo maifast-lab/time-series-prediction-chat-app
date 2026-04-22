@@ -25,7 +25,7 @@ export async function resolveChatDataSource(options: {
   const chatScopedDataSource = await DataSource.findOne({
     userId,
     chatId,
-  }).sort({ createdAt: -1 });
+  }).sort({ createdAt: 1 });
 
   if (chatScopedDataSource) {
     return chatScopedDataSource;
@@ -34,7 +34,7 @@ export async function resolveChatDataSource(options: {
   return DataSource.findOne({
     userId,
     ...UNSCOPED_DATA_SOURCE_FILTER,
-  }).sort({ createdAt: -1 });
+  }).sort({ createdAt: 1 });
 }
 
 export function buildUploadCleanupFilter(userId: string, chatId?: string | null) {
