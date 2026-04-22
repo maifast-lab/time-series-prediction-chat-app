@@ -16,6 +16,11 @@ export interface PatternMatch {
   matchType: "fixed-gap" | "growing-gap" | "decreasing-gap";
 }
 
+export interface PatternAnswerPhrases {
+  matchHeader?: string;
+  noMatch?: string;
+}
+
 export type ReadableYearMonthData = Record<
   string,
   Record<string, Array<Record<string, unknown[]>>>
@@ -400,12 +405,27 @@ function formatPointLabel(
   return `${day} ${month} ${year}`;
 }
 
+function formatMatchHeader(count: number, phrases?: PatternAnswerPhrases): string {
+  const template = phrases?.matchHeader?.trim();
+
+  if (!template) {
+    return `Ye pattern ${count} jgh mila hai :`;
+  }
+
+  return template.includes("{count}")
+    ? template.replaceAll("{count}", String(count))
+    : `${template} ${count}`;
+}
+
 export function buildPatternAnswer(
   matches: PatternMatch[],
-  options: { isRowGridSource: boolean },
+  options: {
+    isRowGridSource: boolean;
+    phrases?: PatternAnswerPhrases;
+  },
 ): string {
   if (matches.length === 0) {
-    return "Ye pattern nhi mila";
+    return options.phrases?.noMatch?.trim() || "Ye pattern nhi mila";
   }
 
   const visibleMatches = [...matches]
@@ -426,7 +446,7 @@ export function buildPatternAnswer(
     return `${label} - ${formatNumber(match.nextPoint.value)}`;
   });
 
-  return [`Ye pattern ${visibleMatches.length} jgh mila hai :`, ...lines].join(
+  return [formatMatchHeader(visibleMatches.length, options.phrases), ...lines].join(
     "\n",
   );
 }

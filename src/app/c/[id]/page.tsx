@@ -378,14 +378,18 @@ export default function ChatPage() {
               <Sparkles className='w-4 h-4' />
             </button>
           </form>
-          <p className='max-w-4xl mx-auto mt-3 px-1 text-xs text-gray-500'>
+          {/* <p className='max-w-4xl mx-auto mt-3 px-1 text-xs text-gray-500'>
             {composerNotice ||
               (hasAnyData
                 ? activeDataSourceName
                   ? `Active Excel: ${activeDataSourceName}. Uploaded sheet ke basis par jawab diya jayega.`
                   : 'Uploaded sheet ke basis par jawab diya jayega.'
                 : 'Upload ke bina query send nahi hogi. Pehle sidebar se sheet upload kijiye.')}
+          </p> */}
+          <p className='max-w-4xl mx-auto mt-3 px-1 text-xs text-center text-gray-500'>
+            AI-generated content may not be accurate.
           </p>
+         
         </div>
       </div>
     </MainLayout>

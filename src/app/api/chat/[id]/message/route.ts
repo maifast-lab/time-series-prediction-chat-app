@@ -142,10 +142,12 @@ export async function POST(
       metadata.routeMode = routeDecision.mode;
       metadata.routeReason = routeDecision.reason;
       metadata.querySequence = querySequence;
+      metadata.patternAnswer = routeDecision.patternAnswer;
       if (!querySequence) {
         finalResponse = routeDecision.answer;
       } else if (!activeDataSource) {
         finalResponse =
+          routeDecision.patternAnswer?.uploadRequired ||
           "Pattern nikalne ke liye pehle Excel ya CSV upload karo.";
       } else {
         const rowGrid = isRowGridSource(activeDataSource);
@@ -157,6 +159,7 @@ export async function POST(
 
         finalResponse = buildPatternAnswer(matches, {
           isRowGridSource: rowGrid,
+          phrases: routeDecision.patternAnswer,
         });
       }
     } catch (geminiError) {

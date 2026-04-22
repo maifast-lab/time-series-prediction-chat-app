@@ -7,6 +7,7 @@ import {
 import { logger } from "@/lib/logger";
 import {
   isReadableYearMonthData,
+  type PatternAnswerPhrases,
   type ReadableYearMonthData,
   toFiniteNumber,
 } from "@/lib/pattern-matcher";
@@ -16,6 +17,9 @@ export interface GeminiRouteDecision {
   sequence: number[] | null;
   answer: string;
   reason?: string;
+  patternAnswer?: PatternAnswerPhrases & {
+    uploadRequired?: string;
+  };
 }
 
 export interface UploadedDataContext {
@@ -71,6 +75,7 @@ function parseGeminiRouteDecision(responseText: string): GeminiRouteDecision {
     typeof payload.answer === "string" ? payload.answer.trim() : "";
   const reason =
     typeof payload.reason === "string" ? payload.reason.trim() : undefined;
+  const patternAnswer = normalizePatternAnswerPhrases(payload.patternAnswer);
 
   if (requestedPattern && sequence) {
     return {
@@ -78,6 +83,7 @@ function parseGeminiRouteDecision(responseText: string): GeminiRouteDecision {
       sequence,
       answer: "",
       reason,
+      patternAnswer,
     };
   }
 
@@ -88,6 +94,34 @@ function parseGeminiRouteDecision(responseText: string): GeminiRouteDecision {
       answer ||
       "Agar pattern nikalwana hai to exactly 4 numbers bhejo, jaise: 1st 100, second 99, third 98, fourth 97.",
     reason,
+    patternAnswer,
+  };
+}
+
+function normalizePatternAnswerPhrases(
+  value: unknown,
+): GeminiRouteDecision["patternAnswer"] {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const matchHeader =
+    typeof value.matchHeader === "string" ? value.matchHeader.trim() : undefined;
+  const noMatch =
+    typeof value.noMatch === "string" ? value.noMatch.trim() : undefined;
+  const uploadRequired =
+    typeof value.uploadRequired === "string"
+      ? value.uploadRequired.trim()
+      : undefined;
+
+  if (!matchHeader && !noMatch && !uploadRequired) {
+    return undefined;
+  }
+
+  return {
+    matchHeader,
+    noMatch,
+    uploadRequired,
   };
 }
 
@@ -251,11 +285,15 @@ export async function routeMessageWithGemini(options: {
     "You are a router and assistant inside a time-series Excel analysis app.",
     "You must always return ONLY valid JSON. Do not return markdown, code fences, headings, or explanation outside JSON.",
     "Your JSON schema is:",
-    '{"mode":"pattern"|"chat","sequence":[number,number,number,number]|null,"answer":"string","reason":"short string"}',
+    '{"mode":"pattern"|"chat","sequence":[number,number,number,number]|null,"answer":"string","reason":"short string","patternAnswer":{"matchHeader":"string with {count}","noMatch":"string","uploadRequired":"string"}}',
     "",
     "Routing rules:",
     "- Use mode='pattern' only when the user is asking to find, match, calculate, predict, or get the next value from a numeric pattern AND exactly four usable data values are present.",
     "- For mode='pattern', put the four data values in sequence in the intended order, set answer to an empty string, and do not calculate the pattern result.",
+    "- For mode='pattern', always fill patternAnswer in the same language and tone as the user's message.",
+    "- patternAnswer.matchHeader must include the exact placeholder {count}. Example in English: 'Found this pattern in {count} places:'",
+    "- patternAnswer.noMatch should mean the pattern was not found.",
+    "- patternAnswer.uploadRequired should tell the user to upload Excel/CSV first.",
     "- Use mode='chat' for every normal question, greeting, explanation request, or incomplete pattern request.",
     "- For mode='chat', write the final user-facing answer in answer.",
     "- If the user asks for a pattern but does not provide exactly four usable data values, answer in simple Hinglish that they must send exactly 4 numbers. Example: '1st 100, second 99, third 98, fourth 97'.",
