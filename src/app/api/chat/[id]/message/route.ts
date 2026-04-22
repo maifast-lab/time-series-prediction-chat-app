@@ -1,113 +1,448 @@
-import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/db';
-import Chat from '@/models/Chat';
-import Message from '@/models/Message';
-import TimeSeriesData from '@/models/TimeSeriesData';
-import {
-  GEMINI_TIMEOUT_MS,
-  getGeminiErrorDetails,
-  getMaifastModel,
-  sleep,
-} from '@/lib/gemini';
-import { resolveChatDataSource } from '@/lib/chat-data-source';
-import { ChatPromptTemplate } from '@langchain/core/prompts';
-import { StringOutputParser } from '@langchain/core/output_parsers';
-import { performVectorSearch } from '@/lib/vector-search';
-import { logger } from '@/lib/logger';
-import {
-  buildSheetJson,
-  buildPredictionTrainingContext,
-  extractNumericSequence,
-  findExactSequenceMatches,
-} from '@/lib/time-series';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { NextResponse } from "next/server";
+import dbConnect from "@/lib/db";
+import Chat from "@/models/Chat";
+import Message from "@/models/Message";
+import TimeSeriesData from "@/models/TimeSeriesData";
+import { resolveChatDataSource } from "@/lib/chat-data-source";
+import { logger } from "@/lib/logger";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
-async function invokeGeminiWithGuardrails<T>(
-  invoke: () => Promise<T>,
-  options: { maxAttempts?: number } = {},
-): Promise<T> {
-  const maxAttempts = options.maxAttempts ?? 2;
-  let lastError: unknown;
+interface HistoryPoint {
+  tag: string;
+  date: Date;
+  value: number;
+  label?: string;
+}
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await invoke();
-    } catch (error) {
-      lastError = error;
-      const errorDetails = getGeminiErrorDetails(error);
+interface NumberedPoint extends HistoryPoint {
+  rowNumber: number;
+}
 
-      if (!errorDetails.isRetryable || attempt >= maxAttempts) {
-        throw error;
+interface PatternMatch {
+  tag: string;
+  nextRow: number;
+  nextPoint: HistoryPoint;
+  matchType: "fixed-gap" | "growing-gap" | "decreasing-gap";
+}
+
+type ReadableYearMonthData = Record<
+  string,
+  Record<string, Array<Record<string, unknown[]>>>
+>;
+
+const MONTH_KEY_TO_NUMBER: Record<string, number> = {
+  jan: 1,
+  feb: 2,
+  mar: 3,
+  apr: 4,
+  may: 5,
+  jun: 6,
+  jul: 7,
+  aug: 8,
+  sep: 9,
+  oct: 10,
+  nov: 11,
+  dec: 12,
+};
+
+function extractNumericSequence(text: string): number[] {
+  return Array.from(text.matchAll(/-?\d+(?:\.\d+)?/g))
+    .map((match) => Number(match[0]))
+    .filter((value) => Number.isFinite(value));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const numericValue = Number(value.trim().replace(/,/g, ""));
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function isReadableYearMonthData(
+  data: unknown,
+): data is ReadableYearMonthData {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  return Object.entries(data).some(([year, months]) => {
+    if (!/^\d{4}$/.test(year) || !isRecord(months)) {
+      return false;
+    }
+
+    return Object.entries(months).some(([month, seriesList]) => {
+      if (!MONTH_KEY_TO_NUMBER[month.toLowerCase()] || !Array.isArray(seriesList)) {
+        return false;
       }
 
-      const waitMs = Math.min(errorDetails.retryAfterMs ?? attempt * 1500, 8000);
-      logger.warn('Retrying Gemini request', {
-        attempt,
-        maxAttempts,
-        waitMs,
-        statusCode: errorDetails.statusCode,
+      return seriesList.some((series) => {
+        if (!isRecord(series)) {
+          return false;
+        }
+
+        return Object.values(series).some(Array.isArray);
       });
-      await sleep(waitMs);
+    });
+  });
+}
+
+function getDateForParts(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function formatDateParts(year: number, month: number, day: number): string {
+  const date = getDateForParts(year, month, day);
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return `Row ${day}`;
+  }
+
+  const monthName = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    timeZone: "UTC",
+  }).format(date).toLowerCase();
+
+  return `${day} ${monthName} ${year}`;
+}
+
+function buildReadableDataHistoryPoints(
+  data: ReadableYearMonthData,
+): HistoryPoint[] {
+  const points: HistoryPoint[] = [];
+
+  for (const [yearKey, months] of Object.entries(data)) {
+    const year = Number(yearKey);
+    if (!Number.isInteger(year)) {
+      continue;
+    }
+
+    for (const [monthKey, seriesList] of Object.entries(months)) {
+      const month = MONTH_KEY_TO_NUMBER[monthKey.toLowerCase()];
+      if (!month || !Array.isArray(seriesList)) {
+        continue;
+      }
+
+      for (const series of seriesList) {
+        if (!isRecord(series)) {
+          continue;
+        }
+
+        for (const [tag, values] of Object.entries(series)) {
+          if (!Array.isArray(values)) {
+            continue;
+          }
+
+          values.forEach((rawValue, index) => {
+            const value = toFiniteNumber(rawValue);
+            if (value === null) {
+              return;
+            }
+
+            const day = index + 1;
+            const monthLabel = String(month).padStart(2, "0");
+
+            points.push({
+              tag: `${tag}::${year}-${monthLabel}`,
+              date: getDateForParts(year, month, day),
+              value,
+              label: formatDateParts(year, month, day),
+            });
+          });
+        }
+      }
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error('Gemini invoke failed');
+  return points;
 }
 
-function buildGeminiFallbackMessage(error: unknown): string {
-  const details = getGeminiErrorDetails(error);
-  const retryAfterSeconds = details.retryAfterMs
-    ? Math.max(1, Math.ceil(details.retryAfterMs / 1000))
-    : null;
+function groupHistoryBySeries(
+  points: HistoryPoint[],
+  getSeriesKey: (point: HistoryPoint) => string,
+): Map<string, NumberedPoint[]> {
+  const grouped = new Map<string, HistoryPoint[]>();
 
-  if (details.isQuotaExceeded) {
-    return [
-      '**Jawab:** Gemini quota limit hit ho gayi hai, isliye abhi answer generate nahi ho paya.',
-      '',
-      '**Sheet Evidence:** Data process ho gaya tha, lekin Gemini API ne quota/billing related error diya.',
-      '',
-      '**Reason:** Google AI Studio ya billing/quota page check kijiye. Free tier par ho to quota reset ke baad phir try kijiye.',
-    ].join('\n');
-  }
+  points.forEach((point) => {
+    const seriesKey = getSeriesKey(point);
 
-  return [
-    '**Jawab:** Gemini abhi temporary issue de raha hai, isliye response complete nahi ho paya.',
-    '',
-    '**Sheet Evidence:** Request valid thi, lekin Gemini API ne rate limit ya temporary service error return kiya.',
-    '',
-    `**Reason:** ${
-      retryAfterSeconds
-        ? `${retryAfterSeconds} second baad same query phir bhejiye.`
-        : 'Thodi der baad same query phir bhejiye.'
-    }`,
-  ].join('\n');
-}
+    if (!grouped.has(seriesKey)) {
+      grouped.set(seriesKey, []);
+    }
 
-function normalizePatternResponse(text: string): string {
-  const trimmed = text.trim().replace(/\r\n?/g, '\n');
-  const headerMatch = trimmed.match(/^Ye pattern \d+ jgh mila hai\s*:/i);
+    grouped.get(seriesKey)!.push(point);
+  });
 
-  if (!headerMatch) {
-    return trimmed;
-  }
-
-  const header = headerMatch[0].replace(/\s*:\s*$/, ' :');
-  const remainder = trimmed.slice(headerMatch[0].length).trim();
-
-  if (!remainder) {
-    return header;
-  }
-
-  const entryMatches = remainder.match(
-    /(?:\d{1,2}(?:st|nd|rd|th)\s+[A-Za-z]+(?:\s+\d{4})?|Row\s+\d+)\s*-\s*-?\d+(?:\.\d+)?/g,
+  return new Map(
+    Array.from(grouped.entries()).map(([seriesKey, tagPoints]) => [
+      seriesKey,
+      tagPoints
+        .sort((left, right) => left.date.getTime() - right.date.getTime())
+        .map((point, index) => ({
+          ...point,
+          rowNumber: index + 1,
+        })),
+    ]),
   );
+}
 
-  if (!entryMatches || entryMatches.length === 0) {
-    return `${header}  \n${remainder}`;
+function getCalendarMonthSeriesKey(point: HistoryPoint): string {
+  const year = point.date.getUTCFullYear();
+  const month = String(point.date.getUTCMonth() + 1).padStart(2, "0");
+
+  return `${point.tag}::${year}-${month}`;
+}
+
+function getCellValueByRow(points: NumberedPoint[]): Map<number, NumberedPoint> {
+  return new Map(points.map((point) => [point.rowNumber, point]));
+}
+
+function findFixedGapMatch(
+  points: NumberedPoint[],
+  sequence: number[],
+): { nextRow: number; nextPoint: NumberedPoint } | null {
+  const rowPointMap = getCellValueByRow(points);
+  const rows = points.map((point) => point.rowNumber);
+  const maxRow = rows[rows.length - 1] ?? 0;
+
+  for (const row1 of rows) {
+    if (rowPointMap.get(row1)?.value !== sequence[0]) {
+      continue;
+    }
+
+    for (let diff = 1; row1 + diff * 4 <= maxRow; diff++) {
+      const row2 = row1 + diff;
+      const row3 = row2 + diff;
+      const row4 = row3 + diff;
+      const nextRow = row4 + diff;
+      const nextPoint = rowPointMap.get(nextRow);
+
+      if (
+        rowPointMap.get(row2)?.value === sequence[1] &&
+        rowPointMap.get(row3)?.value === sequence[2] &&
+        rowPointMap.get(row4)?.value === sequence[3] &&
+        nextPoint
+      ) {
+        return { nextRow, nextPoint };
+      }
+    }
   }
 
-  return `${header}  \n${entryMatches.join('  \n')}`;
+  return null;
+}
+
+function findGrowingGapMatch(
+  points: NumberedPoint[],
+  sequence: number[],
+): { nextRow: number; nextPoint: NumberedPoint } | null {
+  const rowPointMap = getCellValueByRow(points);
+  const rows = points.map((point) => point.rowNumber);
+  const maxRow = rows[rows.length - 1] ?? 0;
+
+  for (const row1 of rows) {
+    if (rowPointMap.get(row1)?.value !== sequence[0]) {
+      continue;
+    }
+
+    for (let diff = 1; row1 + diff * 4 + 6 <= maxRow; diff++) {
+      for (let growth = 1; row1 + diff * 4 + growth * 6 <= maxRow; growth++) {
+        const row2 = row1 + diff;
+        const row3 = row2 + diff + growth;
+        const row4 = row3 + diff + growth * 2;
+        const nextRow = row4 + diff + growth * 3;
+        const nextPoint = rowPointMap.get(nextRow);
+
+        if (
+          rowPointMap.get(row2)?.value === sequence[1] &&
+          rowPointMap.get(row3)?.value === sequence[2] &&
+          rowPointMap.get(row4)?.value === sequence[3] &&
+          nextPoint
+        ) {
+          return { nextRow, nextPoint };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function findDecreasingGapMatch(
+  points: NumberedPoint[],
+  sequence: number[],
+): { nextRow: number; nextPoint: NumberedPoint } | null {
+  const rowPointMap = getCellValueByRow(points);
+  const rows = points.map((point) => point.rowNumber);
+  const maxRow = rows[rows.length - 1] ?? 0;
+
+  for (const row1 of rows) {
+    if (rowPointMap.get(row1)?.value !== sequence[0]) {
+      continue;
+    }
+
+    for (let diff = 1; row1 + diff <= maxRow; diff++) {
+      const maxDecrease = Math.floor((diff - 1) / 3);
+
+      for (let decrease = maxDecrease; decrease >= 1; decrease--) {
+        const diff2 = diff - decrease;
+        const diff3 = diff2 - decrease;
+        const nextDiff = diff3 - decrease;
+
+        if (nextDiff < 1) {
+          continue;
+        }
+
+        const row2 = row1 + diff;
+        const row3 = row2 + diff2;
+        const row4 = row3 + diff3;
+        const nextRow = row4 + nextDiff;
+        const nextPoint = rowPointMap.get(nextRow);
+
+        if (
+          rowPointMap.get(row2)?.value === sequence[1] &&
+          rowPointMap.get(row3)?.value === sequence[2] &&
+          rowPointMap.get(row4)?.value === sequence[3] &&
+          nextPoint
+        ) {
+          return { nextRow, nextPoint };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function findPatternMatches(
+  historyPoints: HistoryPoint[],
+  sequence: number[],
+  options: { seriesMode: "tag" | "calendar-month" } = { seriesMode: "tag" },
+): PatternMatch[] {
+  const matches: PatternMatch[] = [];
+  const grouped =
+    options.seriesMode === "calendar-month"
+      ? groupHistoryBySeries(historyPoints, getCalendarMonthSeriesKey)
+      : groupHistoryBySeries(historyPoints, (point) => point.tag);
+
+  for (const [seriesKey, tagPoints] of grouped.entries()) {
+    if (tagPoints.length < 5) {
+      continue;
+    }
+
+    const fixedMatch = findFixedGapMatch(tagPoints, sequence);
+    const growingMatch = fixedMatch ? null : findGrowingGapMatch(tagPoints, sequence);
+    const decreasingMatch =
+      fixedMatch || growingMatch
+        ? null
+        : findDecreasingGapMatch(tagPoints, sequence);
+    const foundMatch = fixedMatch ?? growingMatch ?? decreasingMatch;
+
+    if (!foundMatch) {
+      continue;
+    }
+
+    const matchType = fixedMatch
+      ? "fixed-gap"
+      : growingMatch
+        ? "growing-gap"
+        : "decreasing-gap";
+
+    matches.push({
+      tag: seriesKey,
+      nextRow: foundMatch.nextRow,
+      nextPoint: foundMatch.nextPoint,
+      matchType,
+    });
+  }
+
+  return matches;
+}
+
+function formatNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(8)));
+}
+
+function formatPointLabel(
+  point: HistoryPoint,
+  rowNumber: number,
+  isRowGridSource: boolean,
+): string {
+  if (point.label) {
+    return point.label;
+  }
+
+  const { date } = point;
+
+  if (
+    isRowGridSource ||
+    (date.getUTCFullYear() === 2000 && date.getUTCMonth() === 0)
+  ) {
+    return `Row ${rowNumber}`;
+  }
+
+  const day = date.getUTCDate();
+  const month = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    timeZone: "UTC",
+  }).format(date).toLowerCase();
+  const year = date.getUTCFullYear();
+
+  return `${day} ${month} ${year}`;
+}
+
+function buildPatternAnswer(
+  matches: PatternMatch[],
+  options: { isRowGridSource: boolean },
+): string {
+  if (matches.length === 0) {
+    return "Ye pattern nhi mila";
+  }
+
+  const visibleMatches = [...matches]
+    .sort(
+      (left, right) =>
+        left.nextPoint.date.getTime() - right.nextPoint.date.getTime() ||
+        left.tag.localeCompare(right.tag) ||
+        left.nextRow - right.nextRow,
+    )
+    .slice(0, 5);
+  const lines = visibleMatches.map((match) => {
+    const label = formatPointLabel(
+      match.nextPoint,
+      match.nextRow,
+      options.isRowGridSource,
+    );
+
+    return `${label} - ${formatNumber(match.nextPoint.value)}`;
+  });
+
+  return [`Ye pattern ${visibleMatches.length} jgh mila hai :`, ...lines].join("\n");
+}
+
+function buildChatTitle(text: string): string {
+  const words = text
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 4);
+
+  return words.length > 0 ? words.join(" ") : "New Chat";
 }
 
 export async function POST(
@@ -117,20 +452,20 @@ export async function POST(
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.dbId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     await dbConnect();
     const { id } = await params;
     const { text } = await req.json();
-    const userText = typeof text === 'string' ? text.trim() : '';
+    const userText = typeof text === "string" ? text.trim() : "";
     if (!userText)
       return NextResponse.json(
-        { error: 'Message text required' },
+        { error: "Message text required" },
         { status: 400 },
       );
     const chat = await Chat.findOne({ _id: id, userId: session.user.dbId });
     if (!chat)
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 });
+      return NextResponse.json({ error: "Chat not found" }, { status: 404 });
 
     const activeDataSource = await resolveChatDataSource({
       userId: session.user.dbId,
@@ -140,301 +475,81 @@ export async function POST(
 
     if (!activeDataSource) {
       return NextResponse.json(
-        { error: 'Upload Excel or CSV before sending a query.' },
+        { error: "Upload Excel or CSV before sending a query." },
         { status: 400 },
       );
     }
 
     await Message.create({
       chatId: chat._id,
-      role: 'user',
+      role: "user",
       content: userText,
     });
 
-    const schemaMap = `Dataset "${activeDataSource.name}": ${
-      activeDataSource.schemaSummary || 'Tabular raw data'
-    }`;
-    const historyDocs = await TimeSeriesData.find({
-      dataSourceId: activeDataSource._id,
-    })
-      .sort({ tag: 1, date: 1 })
-      .select('tag date value -_id');
-
-    const historyPoints = historyDocs.map((doc) => ({
-      tag: doc.tag,
-      date: doc.date,
-      value: doc.value,
-    }));
     const querySequence = extractNumericSequence(userText);
-    const sequenceMatches = findExactSequenceMatches(historyPoints, querySequence);
-    const predictionTraining =
-      querySequence.length >= 4
-        ? buildPredictionTrainingContext(historyPoints, querySequence, {
-            maxWindowSize: Math.min(querySequence.length, 6),
-            minWindowSize: 4,
-            maxCandidates: 5,
-            maxEvidencePerCandidate: 4,
-          })
-        : null;
-    const matchedTags = new Set(sequenceMatches.map((match) => match.tag));
-    predictionTraining?.candidates.forEach((candidate) => {
-      candidate.sourceTags.forEach((tag) => matchedTags.add(tag));
-    });
-    const matchedSeriesJson =
-      matchedTags.size > 0
-        ? buildSheetJson(
-            historyPoints.filter((point) => matchedTags.has(point.tag)),
-            { maxPointsPerTag: 60 },
-          )
-        : [];
-    const valueLookup =
-      querySequence.length > 0
-        ? historyPoints
-            .filter((point) => querySequence.includes(point.value))
-            .slice(-40)
-            .map((point) => ({
-              tag: point.tag,
-              date:
-                point.date instanceof Date
-                  ? point.date.toISOString().slice(0, 10)
-                  : point.date,
-              value: point.value,
-            }))
-        : [];
-    const sheetJsonPreview =
-      Array.isArray(activeDataSource.data) && activeDataSource.data.length > 0
+    const isRowGridSource =
+      activeDataSource.schemaSummary?.includes(
+        "Row-based numeric grid detected without real dates",
+      ) || false;
+    const readableData =
+      !isRowGridSource && isReadableYearMonthData(activeDataSource.data)
         ? activeDataSource.data
-        : buildSheetJson(historyPoints, { maxPointsPerTag: 25 });
-    let contextString = 'No extra tag-specific context found.';
-    let vectorHints: string[] = [];
+        : null;
+    let patternMatches: PatternMatch[] = [];
 
-    try {
-      const contextResults = await performVectorSearch(
-        userText,
-        session.user.dbId,
-        12,
-        {
-          dataSourceId: String(activeDataSource._id),
-          ...(activeDataSource.chatId
-            ? { chatId: String(activeDataSource.chatId) }
-            : {}),
-        },
-      );
-      vectorHints = contextResults.map((result: { content: string }) => result.content);
-      contextString = contextResults
-        .map((r: { content: string }) => `- ${r.content}`)
-        .join('\n');
-    } catch (vErr) {
-      logger.error('Vector Search failed, using uploaded sheet JSON only', vErr);
+    if (querySequence.length === 4) {
+      if (readableData) {
+        patternMatches = findPatternMatches(
+          buildReadableDataHistoryPoints(readableData),
+          querySequence,
+        );
+      } else {
+        const historyDocs = await TimeSeriesData.find({
+          dataSourceId: activeDataSource._id,
+        })
+          .sort({ tag: 1, date: 1 })
+          .select("tag date value -_id");
+        const historyPoints: HistoryPoint[] = historyDocs.map((doc) => ({
+          tag: doc.tag,
+          date: doc.date,
+          value: doc.value,
+        }));
+
+        patternMatches = findPatternMatches(historyPoints, querySequence);
+      }
     }
-
-    logger.info('RAG CONTEXT RETRIEVED');
-
-    const model = getMaifastModel('gemini-2.5-flash', { maxRetries: 0 });
-    const sheetJsonContext = JSON.stringify(
-      {
-        uploadedFile: activeDataSource.name,
-        uploadedSummary: activeDataSource.schemaSummary || '',
-        querySequence,
-        exactSequenceMatches: sequenceMatches,
-        predictionTraining,
-        matchedSeriesJson,
-        valueLookup,
-        sheetJsonPreview,
-        vectorHints,
-      },
-      null,
-      2,
-    );
-
-    const prompt = ChatPromptTemplate.fromMessages([
-      [
-        'system',
-        `
-You are a data analysis assistant working strictly with JSON data.
-The current date and time is {currentDate}.
-
-You will receive one JSON object in {sheetJson}. The user will only provide a sequence of numbers.
-
-YOUR TASK:
-- Read the JSON object carefully.
-- Treat each JSON series independently.
-- Work only with the arrays and objects present in the JSON.
-- Use only the JSON fields provided in {sheetJson}.
-- Do not use general knowledge.
-- Do not predict values mathematically.
-
-JSON STRUCTURE:
-- uploadedFile: file name
-- uploadedSummary: short summary of the uploaded file
-- querySequence: numeric sequence extracted from the user input
-- exactSequenceMatches: exact matched windows already found from time-series history
-- predictionTraining: supporting pattern context from history
-- matchedSeriesJson: matched tag series with values and dated points
-- valueLookup: supporting rows where query values appear
-- sheetJsonPreview: main sheet JSON array
-- vectorHints: supporting tag hints only
-
-JSON SERIES RULES:
-- Treat each object inside matchedSeriesJson or sheetJsonPreview as one JSON series.
-- In each series object:
-  - tag = series name
-  - values = values in top-to-bottom order
-  - points = row-aligned dated values in top-to-bottom order
-  - totalPoints = total available values in that series
-- Use matchedSeriesJson first when it contains relevant series for the sequence.
-- If matchedSeriesJson is empty or not enough, use sheetJsonPreview.
-- exactSequenceMatches, predictionTraining, valueLookup, uploadedSummary, and vectorHints are supporting context only.
-- Do not invent series or values outside the JSON.
-
-CORE RULES:
-- Search all provided JSON series across the JSON arrays.
-- Find series where the full sequence exists in the same series in the same top-to-bottom order.
-- The numbers do not need to be on consecutive rows, but they must appear in order.
-- Use 1-based row numbers.
-
-FOR EACH MATCHING SERIES:
-1. Identify the row positions of each number in that series.
-2. Calculate the row gaps between consecutive numbers.
-3. Extend the gap pattern logically for that same series only.
-4. Determine the next row position.
-5. Fetch the value that already exists in that row of the same series.
-
-STRICT CONSTRAINTS:
-- Never generate or predict a new number.
-- If the user provides more than or less then 4 numbers, return exactly: Exactly 4 numbers provide karo.
-- Only return values that already exist in the JSON data.
-- Each JSON series is independent; row-gap patterns may vary by series.
-- Return results for up to 5 matching series only.
-- If more than 5 matches exist, return the first 5 series in the order they appear in the JSON arrays.
-
-VALIDATION RULES:
-- Ensure all sequence values exist in the same JSON series.
-- Ensure row positions are strictly increasing.
-- Ensure the computed next row exists within that series values/points bounds.
-- If the next row is out of bounds, ignore that series.
-
-OUTPUT RULES: 
-- Return plain text only. Do not return JSON.
-- Do not add Markdown, headings, explanations, comments, or extra text.
-- If matches exist, return in this exact dynamic format:
-Ye pattern <actual match count> jgh mila hai : 
-<next row date in readable format> - <next value from JSON> ,
-<next row date in readable format> - <next value from JSON> ,
-- Put every matched result on its own new line. Never place multiple results on one line.
-- The first line must contain the real number of matched series you are returning.
-- Each line after the first must represent one matched series only.
-- For each matched series, use the date from that series' points array at the computed next row.
-- Format the date in a readable style like: 15th April
-- If a date is unavailable for a matched series, use: Row <next row number> - <next value>
-- Do not include series names, row gaps, row positions, or any extra wording unless the user explicitly asks for them.
-- If no series matches, return exactly: Ye pattern nhi mila
-
-AVAILABLE DATA SOURCES:
-{schemaMap}
-
-UPLOADED SHEET JSON:
-{sheetJson}
-
-EXTRA TIME-SERIES CONTEXT:
-{context}
-        `,
-      ],
-      ['human', '{input}'],
-    ]);
-    const chain = prompt.pipe(model).pipe(new StringOutputParser());
-
-    let aiText: string;
-
-    try {
-      aiText = await invokeGeminiWithGuardrails(
-        () =>
-          chain.invoke(
-            {
-              company: chat.company,
-              place: chat.place,
-              currentDate: new Date().toLocaleString('en-US', {
-                timeZone: 'Asia/Kolkata',
-              }),
-              schemaMap,
-              context: contextString,
-              sheetJson: sheetJsonContext,
-              input: userText,
-            },
-            { timeout: GEMINI_TIMEOUT_MS },
-          ),
-        { maxAttempts: 2 },
-      );
-    } catch (modelError) {
-      const errorDetails = getGeminiErrorDetails(modelError);
-      logger.error('Gemini message generation failed', modelError, errorDetails);
-
-      const assistantMsg = await Message.create({
-        chatId: chat._id,
-        role: 'assistant',
-        content: buildGeminiFallbackMessage(modelError),
-        type: 'text',
-        metadata: {
-          provider: 'gemini',
-          providerError: true,
-          statusCode: errorDetails.statusCode,
-          retryAfterMs: errorDetails.retryAfterMs,
-          isQuotaExceeded: errorDetails.isQuotaExceeded,
-        },
-      });
-
-      return NextResponse.json(assistantMsg);
-    }
-
-    const finalResponse = normalizePatternResponse(aiText);
-    const type = 'text';
-    const metadata = {};
+    const finalResponse =
+      querySequence.length === 4
+        ? buildPatternAnswer(patternMatches, {
+            isRowGridSource,
+          })
+        : "Exactly 4 numbers provide karo";
+    const type = "text";
+    const metadata = {
+      provider: "deterministic-pattern-matcher",
+      uploadedFile: activeDataSource.name,
+      querySequence,
+    };
 
     const assistantMsg = await Message.create({
       chatId: chat._id,
-      role: 'assistant',
+      role: "assistant",
       content: finalResponse,
       type,
       metadata,
     });
 
-    // Generate automatic title if it's currently "New Chat"
-    if (chat.company === 'New Chat') {
-      try {
-        const titlePrompt = ChatPromptTemplate.fromMessages([
-          [
-            'system',
-            'Generate a extremely concise (max 3-4 words) title for a conversation starting with this message. Return ONLY the title text.',
-          ],
-          ['human', userText],
-        ]);
-        const titleChain = titlePrompt
-          .pipe(model)
-          .pipe(new StringOutputParser());
-        const generatedTitle = await invokeGeminiWithGuardrails(
-          () =>
-            titleChain.invoke(
-              { input: userText },
-              { timeout: Math.min(GEMINI_TIMEOUT_MS, 15000) },
-            ),
-          { maxAttempts: 1 },
-        );
-
-        if (generatedTitle && generatedTitle.length < 50) {
-          await Chat.findByIdAndUpdate(chat._id, {
-            company: generatedTitle.trim(),
-          });
-        }
-      } catch (tErr) {
-        logger.error('Failed to generate automatic title', tErr);
-      }
+    if (chat.company === "New Chat") {
+      await Chat.findByIdAndUpdate(chat._id, {
+        company: buildChatTitle(userText),
+      });
     }
 
     return NextResponse.json(assistantMsg);
   } catch (error: unknown) {
-    logger.error('Message Error', error);
+    logger.error("Message Error", error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

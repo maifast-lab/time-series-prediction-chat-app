@@ -13,7 +13,13 @@ function readNumericEnv(name: string, fallback: number): number {
 }
 
 function normalizeGeminiModelName(modelName: string): string {
-  return modelName.includes('2.5') ? DEFAULT_GEMINI_MODEL : modelName;
+  const normalizedModelName = modelName.trim().replace(/^models\//, '');
+
+  if (!normalizedModelName || normalizedModelName.includes('1.5')) {
+    return DEFAULT_GEMINI_MODEL;
+  }
+
+  return normalizedModelName;
 }
 
 export const GEMINI_TIMEOUT_MS = readNumericEnv('GEMINI_TIMEOUT_MS', 45000);
@@ -33,7 +39,7 @@ const genAI = new GoogleGenerativeAI(
 
 export const getGeminiModel = (modelName: string = DEFAULT_GEMINI_MODEL) => {
   try {
-    return genAI.getGenerativeModel({ model: modelName });
+    return genAI.getGenerativeModel({ model: normalizeGeminiModelName(modelName) });
   } catch (e) {
     logger.warn('Gemini Model load failed', { error: e });
     return genAI.getGenerativeModel({ model: DEFAULT_GEMINI_MODEL });

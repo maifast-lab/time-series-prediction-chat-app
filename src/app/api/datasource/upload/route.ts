@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import mongoose from 'mongoose';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import * as xlsx from 'xlsx';
 
 import { authOptions } from '@/lib/auth';
@@ -13,6 +15,8 @@ import Chat from '@/models/Chat';
 import DataSource from '@/models/DataSource';
 import VectorData, { IVectorData } from '@/models/VectorData';
 import TimeSeriesData from '@/models/TimeSeriesData';
+
+const ENABLE_PARSED_JSON_DUMP = true;
 
 // Month name mappings
 const MONTH_MAP: Record<string, number> = {
@@ -49,6 +53,20 @@ const MONTH_MAP: Record<string, number> = {
   DECEMBER: 12,
   DECE: 12,
 };
+const MONTH_KEYS = [
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'may',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'oct',
+  'nov',
+  'dec',
+];
 
 function isYear(value: unknown): value is number {
   return typeof value === 'number' && value >= 1900 && value <= 2100;
@@ -67,6 +85,251 @@ interface ParsedPoint {
   value: number;
 }
 
+type ReadableYearMonthData = Record<
+  string,
+  Record<string, Array<Record<string, number[]>>>
+>;
+type GroupedReadableData = Map<
+  string,
+  Map<string, Map<string, Array<{ day: number; value: number }>>>
+>;
+
+function getMonthKey(monthIndex: number): string {
+  return MONTH_KEYS[monthIndex] || `month_${monthIndex + 1}`;
+}
+
+function buildReadableYearMonthData(
+  points: ParsedPoint[],
+): ReadableYearMonthData {
+  const grouped: GroupedReadableData = new Map();
+
+  [...points]
+    .filter(
+      (point) =>
+        point.tag &&
+        Number.isFinite(point.value) &&
+        !Number.isNaN(point.date.getTime()),
+    )
+    .sort(
+      (left, right) =>
+        left.date.getTime() - right.date.getTime() ||
+        left.tag.localeCompare(right.tag),
+    )
+    .forEach((point) => {
+      const year = String(point.date.getUTCFullYear());
+      const month = getMonthKey(point.date.getUTCMonth());
+      const day = point.date.getUTCDate();
+
+      if (!grouped.has(year)) {
+        grouped.set(year, new Map());
+      }
+
+      const yearBucket = grouped.get(year)!;
+
+      if (!yearBucket.has(month)) {
+        yearBucket.set(month, new Map());
+      }
+
+      const monthBucket = yearBucket.get(month)!;
+
+      if (!monthBucket.has(point.tag)) {
+        monthBucket.set(point.tag, []);
+      }
+
+      monthBucket.get(point.tag)!.push({ day, value: point.value });
+    });
+
+  return Array.from(grouped.entries())
+    .sort(([leftYear], [rightYear]) => Number(leftYear) - Number(rightYear))
+    .reduce<ReadableYearMonthData>((yearResult, [year, monthMap]) => {
+      yearResult[year] = {};
+
+      MONTH_KEYS.forEach((month) => {
+        const tagMap = monthMap.get(month);
+        if (!tagMap) return;
+
+        yearResult[year][month] = Array.from(tagMap.entries())
+          .sort(([leftTag], [rightTag]) => leftTag.localeCompare(rightTag))
+          .map(([tag, entries]) => ({
+            [tag]: entries
+              .sort((left, right) => left.day - right.day)
+              .map((entry) => entry.value),
+          }));
+      });
+
+      return yearResult;
+    }, {});
+}
+
+async function dumpParsedJsonToPublic(payload: {
+  fileName: string;
+  parseModes: string[];
+  totalPoints: number;
+  readableData: ReadableYearMonthData;
+  sheetJsonPreview: unknown[];
+  schemaSummary: string;
+}) {
+  const dumpDir = path.join(process.cwd(), 'public', 'parsed-json');
+  const safeFileName = payload.fileName.replace(/[^a-zA-Z0-9._-]+/g, '-');
+  const dumpFileName = `${Date.now()}-${safeFileName}.json`;
+  const dumpPath = path.join(dumpDir, dumpFileName);
+
+  await mkdir(dumpDir, { recursive: true });
+  await writeFile(
+    dumpPath,
+    JSON.stringify(
+      {
+        fileName: payload.fileName,
+        parseModes: payload.parseModes,
+        schemaSummary: payload.schemaSummary,
+        totalPoints: payload.totalPoints,
+        data: payload.readableData,
+        sheetJsonPreview: payload.sheetJsonPreview,
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  );
+
+  return {
+    dumpFileName,
+    publicPath: `/parsed-json/${dumpFileName}`,
+  };
+}
+
+function normalizeBaseTag(value: unknown, fallbackTag: string): string {
+  const trimmed = String(value ?? '').trim();
+
+  if (!trimmed) {
+    return fallbackTag;
+  }
+
+  return isNaN(Number(trimmed)) ? trimmed.toUpperCase() : `Series_${trimmed}`;
+}
+
+function buildUniqueColumnTags(
+  values: unknown[],
+  fallbackPrefix: string,
+): string[] {
+  const seenTags = new Map<string, number>();
+
+  return values.map((value, index) => {
+    const baseTag = normalizeBaseTag(value, `${fallbackPrefix}_${index + 1}`);
+    const nextCount = (seenTags.get(baseTag) || 0) + 1;
+    seenTags.set(baseTag, nextCount);
+
+    return nextCount === 1 ? baseTag : `${baseTag}_${nextCount}`;
+  });
+}
+
+function buildMonthGridColumnTags(
+  grid: unknown[][],
+  lastColumnIndex: number,
+): string[] {
+  const seenTagsInPeriod = new Map<string, number>();
+
+  return Array.from({ length: lastColumnIndex + 1 }, (_, index) => {
+    const baseTag = normalizeBaseTag(grid[2]?.[index], `Series_${index + 1}`);
+    const year = Number(grid[0]?.[index]);
+    const month = Number(grid[1]?.[index]);
+    const periodTagKey = `${Number.isFinite(year) ? year : 'unknown'}-${
+      Number.isFinite(month) ? month : 'unknown'
+    }-${baseTag}`;
+    const nextCount = (seenTagsInPeriod.get(periodTagKey) || 0) + 1;
+    seenTagsInPeriod.set(periodTagKey, nextCount);
+
+    return nextCount === 1 ? baseTag : `${baseTag}_${nextCount}`;
+  });
+}
+
+function isNumericValue(value: unknown): boolean {
+  if (value === null || value === '') return false;
+  return Number.isFinite(Number(value));
+}
+
+function looksLikeMonthHeaderSheet(grid: unknown[][]): boolean {
+  if (!grid || grid.length < 4) return false;
+  const yearHeaderCount = (grid[0] || []).filter((cell) =>
+    isYear(parseInt(String(cell), 10)),
+  ).length;
+  const monthHeaderCount = (grid[1] || []).filter((cell) => {
+    if (typeof cell === 'string') {
+      return isMonth(cell.toUpperCase());
+    }
+
+    return false;
+  }).length;
+  const tagHeaderCount = (grid[2] || []).filter(
+    (cell) => cell !== null && cell !== '',
+  ).length;
+
+  return yearHeaderCount > 0 && monthHeaderCount > 0 && tagHeaderCount > 0;
+}
+
+function parseNumericGrid(grid: unknown[][]): ParsedPoint[] {
+  const points: ParsedPoint[] = [];
+
+  if (!grid || grid.length < 2) return points;
+
+  const maxCols = Math.max(...grid.map((row) => row?.length || 0), 0);
+  if (maxCols === 0) return points;
+
+  const firstRow = grid[0] || [];
+  const populatedHeaderCells = firstRow.filter((cell) => cell !== null && cell !== '');
+  const nonNumericHeaderCells = populatedHeaderCells.filter(
+    (cell) => typeof cell === 'string' && cell.trim() !== '' && isNaN(Number(cell)),
+  ).length;
+  const hasHeaderRow =
+    populatedHeaderCells.length > 0 &&
+    nonNumericHeaderCells >= Math.ceil(populatedHeaderCells.length / 2);
+  const dataStartRow = hasHeaderRow ? 1 : 0;
+
+  let nonEmptyCells = 0;
+  let numericCells = 0;
+
+  for (let rowIndex = dataStartRow; rowIndex < grid.length; rowIndex++) {
+    for (let colIndex = 0; colIndex < maxCols; colIndex++) {
+      const cell = grid[rowIndex]?.[colIndex];
+      if (cell === null || cell === '') continue;
+      nonEmptyCells += 1;
+
+      if (isNumericValue(cell)) {
+        numericCells += 1;
+      }
+    }
+  }
+
+  if (nonEmptyCells === 0 || numericCells / nonEmptyCells < 0.8) {
+    return points;
+  }
+
+  const tags = hasHeaderRow
+    ? buildUniqueColumnTags(grid[0] || [], 'Series')
+    : Array.from({ length: maxCols }, (_, colIndex) => `Series_${colIndex + 1}`);
+
+  for (let colIndex = 0; colIndex < maxCols; colIndex++) {
+    for (let rowIndex = dataStartRow; rowIndex < grid.length; rowIndex++) {
+      const cell = grid[rowIndex]?.[colIndex];
+      if (!isNumericValue(cell)) continue;
+
+      const rowNumber = rowIndex - dataStartRow + 1;
+      points.push({
+        // Plain numeric sheets do not have real dates. We keep row order via a synthetic date.
+        date: new Date(Date.UTC(2000, 0, rowNumber)),
+        tag: tags[colIndex],
+        value: Number(cell),
+      });
+    }
+  }
+
+  if (points.length > 0) {
+    logger.info(`Parsed numeric grid with ${points.length} points`);
+  }
+
+  return points;
+}
+
 /**
  * Method: parseMyExcel (Logic from test-method1.cjs)
  * Row 0: Year (sparse, filled backwards), Row 1: Month (sparse, filled backwards), Row 2: Tag
@@ -80,7 +343,7 @@ function parseMyExcel(grid: unknown[][]): ParsedPoint[] {
   let year = grid[0][0];
   for (let i = 1; i < grid[0].length; i++) {
     const cell = grid[0][i];
-    if (cell && cell !== null && isYear(parseInt(String(cell)))) {
+    if (cell && cell !== null && isYear(parseInt(String(cell), 10))) {
       year = cell;
       let j = i - 1;
       while (j >= 0 && (grid[0][j] == null || grid[0][j] == '')) {
@@ -111,7 +374,7 @@ function parseMyExcel(grid: unknown[][]): ParsedPoint[] {
   }
 
   // 3. Find last index for tags
-  let lastIdx = grid[2].length;
+  let lastIdx = grid[2].length - 1;
   for (let i = 0; i < grid[2].length; i++) {
     if (
       typeof grid[2][i] === 'string' &&
@@ -122,20 +385,19 @@ function parseMyExcel(grid: unknown[][]): ParsedPoint[] {
     }
   }
 
+  const tags = buildMonthGridColumnTags(grid, lastIdx);
+
   // 4. Extract Data
   for (let i = 0; i <= lastIdx; i++) {
     const yearVal = grid[0][i];
     const monthVal = grid[1][i];
-    const tagVal = grid[2][i];
-
-    if (tagVal == null || tagVal == '') continue;
-    const tag = String(tagVal).toUpperCase();
+    const tag = tags[i];
 
     // Data starts at row 3 (which is index 3)
 
     for (let j = 3; j < grid.length; j++) {
       const val = grid[j][i];
-      if (val == null || val === '') {
+      if (!isNumericValue(val)) {
         continue;
       }
 
@@ -145,12 +407,17 @@ function parseMyExcel(grid: unknown[][]): ParsedPoint[] {
       // Basic validation for day
       if (day < 1 || day > 31) continue;
 
-      // Create Date object
       try {
-        const date = new Date(Number(yearVal), Number(monthVal) - 1, day);
+        const yearNumber = Number(yearVal);
+        const monthNumber = Number(monthVal);
+        const date = new Date(Date.UTC(yearNumber, monthNumber - 1, day));
 
-        // Check if date is valid
-        if (!isNaN(date.getTime())) {
+        if (
+          !isNaN(date.getTime()) &&
+          date.getUTCFullYear() === yearNumber &&
+          date.getUTCMonth() === monthNumber - 1 &&
+          date.getUTCDate() === day
+        ) {
           points.push({
             date: date,
             tag: tag,
@@ -211,6 +478,13 @@ function parseDynamicExcel(grid: unknown[][]): ParsedPoint[] {
       `Dynamic Parser: Detected Vertical Layout with Date Column at index ${dateColIdx}`,
     );
 
+    const columnTags = buildUniqueColumnTags(
+      Array.from({ length: numCols }, (_, index) =>
+        index === dateColIdx ? null : grid[0]?.[index],
+      ),
+      'Series',
+    );
+
     // Vertical Layout: iterate rows
     // Row 0 is headers (Tags)
     // Col `dateColIdx` is Date
@@ -244,13 +518,12 @@ function parseDynamicExcel(grid: unknown[][]): ParsedPoint[] {
       for (let j = 0; j < row.length; j++) {
         if (j === dateColIdx) continue;
 
-        const tag = String(grid[0][j] || `Col_${j}`).trim();
         const val = row[j];
 
         if (val !== null && val !== '' && !isNaN(Number(val))) {
           points.push({
             date: date,
-            tag: isNaN(Number(tag)) ? tag : `Series_${tag}`, // Avoid numeric tags if possible
+            tag: columnTags[j] || `Series_${j + 1}`,
             value: Number(val),
           });
         }
@@ -297,10 +570,13 @@ export async function POST(req: Request) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     let allPoints: ParsedPoint[] = [];
+    const parseModes = new Set<string>();
 
     // Parse Excel
     if (file.name.match(/\.(xlsx|xls|csv)$/)) {
       const workbook = xlsx.read(buffer, { type: 'buffer' });
+
+      const shouldPrefixSheetName = workbook.SheetNames.length > 1;
 
       for (const sheetName of workbook.SheetNames) {
         const sheet = workbook.Sheets[sheetName];
@@ -308,19 +584,38 @@ export async function POST(req: Request) {
           header: 1,
           defval: null,
         }) as unknown[][];
-        const points = parseMyExcel(data);
-        console.log(`Sheet "${sheetName}" parsed with ${data} points using parseMyExcel.`);
-        if (points.length > 0) {
-          allPoints = allPoints.concat(points);
-        } else {
-          // Fallback to Dynamic Parser
-          const dynamicPoints = parseDynamicExcel(data);
-          if (dynamicPoints.length > 0) {
+        const scopePointsToSheet = (points: ParsedPoint[]) =>
+          shouldPrefixSheetName
+            ? points.map((point) => ({
+                ...point,
+                tag: `${sheetName}::${point.tag}`,
+              }))
+            : points;
+        if (looksLikeMonthHeaderSheet(data)) {
+          const points = parseMyExcel(data);
+          if (points.length > 0) {
             logger.info(
-              `Fallback to Dynamic Parser success: ${dynamicPoints.length} points`,
+              `Sheet "${sheetName}" parsed with ${points.length} points using parseMyExcel.`,
             );
-            allPoints = allPoints.concat(dynamicPoints);
+            parseModes.add('month-grid');
+            allPoints = allPoints.concat(scopePointsToSheet(points));
+            continue;
           }
+        }
+
+        const dynamicPoints = parseDynamicExcel(data);
+        if (dynamicPoints.length > 0) {
+          logger.info(
+            `Fallback to Dynamic Parser success: ${dynamicPoints.length} points`,
+          );
+          parseModes.add('dated-table');
+          allPoints = allPoints.concat(scopePointsToSheet(dynamicPoints));
+          continue;
+        }
+        const numericGridPoints = parseNumericGrid(data);
+        if (numericGridPoints.length > 0) {
+          parseModes.add('row-grid');
+          allPoints = allPoints.concat(scopePointsToSheet(numericGridPoints));
         }
       }
     }
@@ -344,16 +639,36 @@ export async function POST(req: Request) {
     const sheetJsonPreview = buildSheetJson(allPoints, {
       maxPointsPerTag: 25,
     });
+    const readableData = buildReadableYearMonthData(allPoints);
     const uniqueTags = [...new Set(allPoints.map((p) => p.tag))];
+
+    const layoutSummary = parseModes.has('row-grid')
+      ? 'Row-based numeric grid detected without real dates. Use row positions for pattern answers.'
+      : 'Date-based time-series data detected.';
+    const schemaSummary = `${layoutSummary} Parsed ${allPoints.length} points across ${uniqueTags.length} tags. Tags: ${uniqueTags.join(', ')}`;
 
     const dataSource = await DataSource.create({
       userId: session.user.dbId,
       ...(chat ? { chatId: chat._id } : {}),
       name: file.name,
       sourceType: 'time-series',
-      data: sheetJsonPreview,
-      schemaSummary: `Parsed ${allPoints.length} points across ${uniqueTags.length} tags. Tags: ${uniqueTags.join(', ')}`,
+      data: readableData,
+      schemaSummary,
     });
+
+    // let parsedJsonDump: { dumpFileName: string; publicPath: string } | null = null;
+
+    // Comment this block or set ENABLE_PARSED_JSON_DUMP = false to disable public JSON dumps.
+    // if (ENABLE_PARSED_JSON_DUMP) {
+    //   parsedJsonDump = await dumpParsedJsonToPublic({
+    //     fileName: file.name,
+    //     parseModes: Array.from(parseModes),
+    //     totalPoints: allPoints.length,
+    //     readableData,
+    //     sheetJsonPreview,
+    //     schemaSummary,
+    //   });
+    // }
 
     // Bulk write TimeSeriesData
     const tsDocs = allPoints.map((p) => ({
@@ -382,7 +697,6 @@ export async function POST(req: Request) {
 
       // We embed the summary so "Predict FB" matches this document
       const embedding = (await getBatchEmbeddings([summary]))[0];
-
       vectorDocs.push({
         userId: new mongoose.Types.ObjectId(session.user.dbId),
         ...(chat ? { chatId: chat._id as mongoose.Types.ObjectId } : {}),
@@ -421,6 +735,7 @@ export async function POST(req: Request) {
       points: allPoints.length,
       tags: tags.length,
       sheetJsonPreview,
+      // parsedJsonDump,
     });
   } catch (e) {
     logger.error('Upload failed', e);

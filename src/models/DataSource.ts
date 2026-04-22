@@ -5,7 +5,7 @@ export interface IDataSource extends Document {
   chatId?: mongoose.Types.ObjectId;
   name: string;
   sourceType: string;
-  data: unknown[];
+  data: unknown;
   schemaSummary?: string;
   createdAt: Date;
 }
@@ -16,7 +16,7 @@ const DataSourceSchema = new Schema<IDataSource>(
     chatId: { type: Schema.Types.ObjectId, ref: 'Chat' },
     name: { type: String, required: true },
     sourceType: { type: String, required: true },
-    data: [{ type: Schema.Types.Mixed }],
+    data: { type: Schema.Types.Mixed },
     schemaSummary: { type: String },
     createdAt: { type: Date, default: Date.now },
   },
