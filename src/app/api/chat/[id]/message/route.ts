@@ -7,6 +7,12 @@ import { resolveChatDataSource } from "@/lib/chat-data-source";
 import { logger } from "@/lib/logger";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import {
+  GEMINI_TIMEOUT_MS,
+  getGeminiErrorDetails,
+  getGeminiModel,
+  sleep,
+} from "@/lib/gemini";
 
 interface HistoryPoint {
   tag: string;
@@ -24,6 +30,18 @@ interface PatternMatch {
   nextRow: number;
   nextPoint: HistoryPoint;
   matchType: "fixed-gap" | "growing-gap" | "decreasing-gap";
+}
+
+interface PatternRequestParse {
+  isLikelyPatternRequest: boolean;
+  sequence: number[] | null;
+  extractedNumbers: number[];
+}
+
+interface UploadedDataContext {
+  name?: unknown;
+  schemaSummary?: unknown;
+  data?: unknown;
 }
 
 type ReadableYearMonthData = Record<
@@ -46,10 +64,99 @@ const MONTH_KEY_TO_NUMBER: Record<string, number> = {
   dec: 12,
 };
 
-function extractNumericSequence(text: string): number[] {
+const PATTERN_INTENT_REGEX =
+  /\b(pattern|patern|patten|sequence|series|match|matching|mila|find|next|prediction|predict|gap|calculate|calc)\b/i;
+
+const POSITION_LABELS: Array<{ index: number; regex: RegExp }> = [
+  { index: 0, regex: /\b(?:1\s*(?:st|no\.?|num(?:ber)?)|first|frist)\b/gi },
+  {
+    index: 1,
+    regex:
+      /\b(?:2\s*(?:nd|no\.?|num(?:ber)?)|second|secend|secned|secnd|secound)\b/gi,
+  },
+  { index: 2, regex: /\b(?:3\s*(?:rd|no\.?|num(?:ber)?)|third|thrid)\b/gi },
+  { index: 3, regex: /\b(?:4\s*(?:th|no\.?|num(?:ber)?)|fourth|forth)\b/gi },
+];
+
+function extractNumbers(text: string): number[] {
   return Array.from(text.matchAll(/-?\d+(?:\.\d+)?/g))
     .map((match) => Number(match[0]))
     .filter((value) => Number.isFinite(value));
+}
+
+function stripPatternHelperNumbers(text: string): string {
+  let cleaned = text;
+
+  cleaned = cleaned.replace(
+    /\b4\s*(?:number|numbers|no|nos|value|values|digit|digits|pattern|patern|patten)\b/gi,
+    " ",
+  );
+  cleaned = cleaned.replace(
+    /\bfour\s*(?:number|numbers|no|nos|value|values|digit|digits|pattern|patern|patten)\b/gi,
+    " ",
+  );
+  cleaned = cleaned.replace(/\b(?:top|first|max|maximum|only)\s*5\b/gi, " ");
+  cleaned = cleaned.replace(
+    /\b(?:five)\s*(?:match|matches|result|results)?\b/gi,
+    " ",
+  );
+
+  for (const { regex } of POSITION_LABELS) {
+    cleaned = cleaned.replace(regex, " ");
+  }
+
+  return cleaned;
+}
+
+function extractLabeledSequence(text: string): number[] | null {
+  const labels: Array<{ index: number; start: number; end: number }> = [];
+
+  for (const { index, regex } of POSITION_LABELS) {
+    regex.lastIndex = 0;
+    for (const match of text.matchAll(regex)) {
+      labels.push({
+        index,
+        start: match.index ?? 0,
+        end: (match.index ?? 0) + match[0].length,
+      });
+    }
+  }
+
+  if (labels.length === 0) {
+    return null;
+  }
+
+  labels.sort((left, right) => left.start - right.start);
+
+  const values: Array<number | null> = [null, null, null, null];
+
+  labels.forEach((label, labelIndex) => {
+    const nextLabel = labels[labelIndex + 1];
+    const segment = text.slice(label.end, nextLabel?.start);
+    const numbers = extractNumbers(segment);
+
+    if (numbers.length > 0) {
+      values[label.index] = numbers[0];
+    }
+  });
+
+  return values.every((value): value is number => value !== null)
+    ? values
+    : null;
+}
+
+function parsePatternRequest(text: string): PatternRequestParse {
+  const labeledSequence = extractLabeledSequence(text);
+  const cleanedNumbers = extractNumbers(stripPatternHelperNumbers(text));
+  const sequence =
+    labeledSequence ?? (cleanedNumbers.length === 4 ? cleanedNumbers : null);
+
+  return {
+    isLikelyPatternRequest:
+      PATTERN_INTENT_REGEX.test(text) || sequence !== null,
+    sequence,
+    extractedNumbers: sequence ?? cleanedNumbers,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -69,9 +176,7 @@ function toFiniteNumber(value: unknown): number | null {
   return Number.isFinite(numericValue) ? numericValue : null;
 }
 
-function isReadableYearMonthData(
-  data: unknown,
-): data is ReadableYearMonthData {
+function isReadableYearMonthData(data: unknown): data is ReadableYearMonthData {
   if (!isRecord(data)) {
     return false;
   }
@@ -82,7 +187,10 @@ function isReadableYearMonthData(
     }
 
     return Object.entries(months).some(([month, seriesList]) => {
-      if (!MONTH_KEY_TO_NUMBER[month.toLowerCase()] || !Array.isArray(seriesList)) {
+      if (
+        !MONTH_KEY_TO_NUMBER[month.toLowerCase()] ||
+        !Array.isArray(seriesList)
+      ) {
         return false;
       }
 
@@ -116,7 +224,9 @@ function formatDateParts(year: number, month: number, day: number): string {
   const monthName = new Intl.DateTimeFormat("en-US", {
     month: "long",
     timeZone: "UTC",
-  }).format(date).toLowerCase();
+  })
+    .format(date)
+    .toLowerCase();
 
   return `${day} ${monthName} ${year}`;
 }
@@ -208,7 +318,9 @@ function getCalendarMonthSeriesKey(point: HistoryPoint): string {
   return `${point.tag}::${year}-${month}`;
 }
 
-function getCellValueByRow(points: NumberedPoint[]): Map<number, NumberedPoint> {
+function getCellValueByRow(
+  points: NumberedPoint[],
+): Map<number, NumberedPoint> {
   return new Map(points.map((point) => [point.rowNumber, point]));
 }
 
@@ -224,7 +336,6 @@ function findFixedGapMatch(
     if (rowPointMap.get(row1)?.value !== sequence[0]) {
       continue;
     }
-
     for (let diff = 1; row1 + diff * 4 <= maxRow; diff++) {
       const row2 = row1 + diff;
       const row3 = row2 + diff;
@@ -345,7 +456,9 @@ function findPatternMatches(
     }
 
     const fixedMatch = findFixedGapMatch(tagPoints, sequence);
-    const growingMatch = fixedMatch ? null : findGrowingGapMatch(tagPoints, sequence);
+    const growingMatch = fixedMatch
+      ? null
+      : findGrowingGapMatch(tagPoints, sequence);
     const decreasingMatch =
       fixedMatch || growingMatch
         ? null
@@ -374,7 +487,9 @@ function findPatternMatches(
 }
 
 function formatNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(8)));
+  return Number.isInteger(value)
+    ? String(value)
+    : String(Number(value.toFixed(8)));
 }
 
 function formatPointLabel(
@@ -399,7 +514,9 @@ function formatPointLabel(
   const month = new Intl.DateTimeFormat("en-US", {
     month: "long",
     timeZone: "UTC",
-  }).format(date).toLowerCase();
+  })
+    .format(date)
+    .toLowerCase();
   const year = date.getUTCFullYear();
 
   return `${day} ${month} ${year}`;
@@ -431,7 +548,9 @@ function buildPatternAnswer(
     return `${label} - ${formatNumber(match.nextPoint.value)}`;
   });
 
-  return [`Ye pattern ${visibleMatches.length} jgh mila hai :`, ...lines].join("\n");
+  return [`Ye pattern ${visibleMatches.length} jgh mila hai :`, ...lines].join(
+    "\n",
+  );
 }
 
 function buildChatTitle(text: string): string {
@@ -443,6 +562,194 @@ function buildChatTitle(text: string): string {
     .slice(0, 4);
 
   return words.length > 0 ? words.join(" ") : "New Chat";
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Gemini request timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+async function invokeGeminiWithGuardrails<T>(
+  invoke: () => Promise<T>,
+  options: { maxAttempts?: number } = {},
+): Promise<T> {
+  const maxAttempts = options.maxAttempts ?? 2;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await invoke();
+    } catch (error) {
+      lastError = error;
+      const errorDetails = getGeminiErrorDetails(error);
+
+      if (!errorDetails.isRetryable || attempt >= maxAttempts) {
+        throw error;
+      }
+
+      const waitMs = Math.min(
+        errorDetails.retryAfterMs ?? attempt * 1500,
+        8000,
+      );
+      logger.warn("Retrying Gemini request", {
+        attempt,
+        maxAttempts,
+        waitMs,
+        statusCode: errorDetails.statusCode,
+      });
+      await sleep(waitMs);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Gemini invoke failed");
+}
+
+function buildGeminiFallbackMessage(error: unknown): string {
+  const details = getGeminiErrorDetails(error);
+
+  if (details.isQuotaExceeded) {
+    return "Gemini quota limit hit ho gayi hai. Google AI Studio billing/quota check karo, ya quota reset ke baad try karo.";
+  }
+
+  return "Gemini abhi answer nahi de pa raha. Thodi der baad same message phir bhejo.";
+}
+
+function buildReadableDataSummary(data: ReadableYearMonthData) {
+  const years = Object.keys(data).sort(
+    (left, right) => Number(left) - Number(right),
+  );
+  const tags = new Set<string>();
+  const sample: Array<{
+    year: string;
+    month: string;
+    series: Array<{ tag: string; firstValues: number[]; totalValues: number }>;
+  }> = [];
+
+  for (const year of years) {
+    const months = data[year];
+
+    for (const month of Object.keys(months)) {
+      const series = months[month];
+      const sampleSeries: Array<{
+        tag: string;
+        firstValues: number[];
+        totalValues: number;
+      }> = [];
+
+      for (const seriesEntry of series) {
+        for (const [tag, values] of Object.entries(seriesEntry)) {
+          tags.add(tag);
+
+          if (sample.length < 6 && sampleSeries.length < 4) {
+            sampleSeries.push({
+              tag,
+              firstValues: values
+                .map((value) => toFiniteNumber(value))
+                .filter((value): value is number => value !== null)
+                .slice(0, 8),
+              totalValues: values.length,
+            });
+          }
+        }
+      }
+
+      if (sample.length < 6 && sampleSeries.length > 0) {
+        sample.push({ year, month, series: sampleSeries });
+      }
+    }
+  }
+
+  return {
+    shape: "year-month-tag arrays",
+    years,
+    tags: Array.from(tags).sort(),
+    sample,
+  };
+}
+
+function stringifyForPrompt(value: unknown, maxChars = 12000): string {
+  try {
+    const text = JSON.stringify(value, null, 2);
+    return text.length > maxChars
+      ? `${text.slice(0, maxChars)}\n...truncated`
+      : text;
+  } catch {
+    return "Context could not be serialized.";
+  }
+}
+
+function buildGeminiDataContext(
+  dataSource: UploadedDataContext | null,
+): string {
+  if (!dataSource) {
+    return "No uploaded datasource is available for this chat.";
+  }
+
+  const data =
+    !String(dataSource.schemaSummary ?? "").includes(
+      "Row-based numeric grid detected without real dates",
+    ) && isReadableYearMonthData(dataSource.data)
+      ? buildReadableDataSummary(dataSource.data)
+      : dataSource.data;
+
+  return stringifyForPrompt({
+    uploadedFile: dataSource.name ?? "unknown",
+    uploadedSummary: dataSource.schemaSummary ?? "",
+    data,
+  });
+}
+
+async function generateGeminiAnswer(options: {
+  userText: string;
+  dataSource: UploadedDataContext | null;
+  patternParse: PatternRequestParse;
+}): Promise<string> {
+  const model = getGeminiModel("gemini-2.5-flash");
+  const prompt = [
+    "You are a concise assistant inside a time-series Excel analysis app.",
+    "Reply in the same language style as the user. Hinglish is okay when the user writes Hinglish.",
+    "If the user asks a normal question, answer normally.",
+    "If the user asks about the uploaded file, use the uploaded data context below. Do not invent exact values that are not present in the context.",
+    "If the user asks for a four-number pattern/next-value match, do not calculate it yourself. The backend handles that only when exactly four usable data values are present.",
+    "If the user is asking for a pattern but did not provide exactly four usable data values, ask them briefly to send exactly four numbers. Mention they can write them in any form like '1st 100, second 99, third 98, fourth 97'.",
+    "",
+    `Pattern parser info: ${stringifyForPrompt(options.patternParse, 2000)}`,
+    "",
+    "Uploaded data context:",
+    buildGeminiDataContext(options.dataSource),
+    "",
+    "User message:",
+    options.userText,
+  ].join("\n");
+
+  const result = await invokeGeminiWithGuardrails(
+    () => withTimeout(model.generateContent(prompt), GEMINI_TIMEOUT_MS),
+    { maxAttempts: 2 },
+  );
+  const text = result.response.text().trim();
+
+  return (
+    text ||
+    "Gemini se empty response aaya. Message thoda clear karke phir bhejo."
+  );
 }
 
 export async function POST(
@@ -473,63 +780,88 @@ export async function POST(
       dataSourceId: chat.dataSourceId?.toString(),
     });
 
-    if (!activeDataSource) {
-      return NextResponse.json(
-        { error: "Upload Excel or CSV before sending a query." },
-        { status: 400 },
-      );
-    }
-
     await Message.create({
       chatId: chat._id,
       role: "user",
       content: userText,
     });
 
-    const querySequence = extractNumericSequence(userText);
+    const patternParse = parsePatternRequest(userText);
+    const querySequence = patternParse.sequence;
     const isRowGridSource =
-      activeDataSource.schemaSummary?.includes(
+      activeDataSource?.schemaSummary?.includes(
         "Row-based numeric grid detected without real dates",
       ) || false;
     const readableData =
-      !isRowGridSource && isReadableYearMonthData(activeDataSource.data)
+      activeDataSource &&
+      !isRowGridSource &&
+      isReadableYearMonthData(activeDataSource.data)
         ? activeDataSource.data
         : null;
     let patternMatches: PatternMatch[] = [];
+    let finalResponse: string;
+    const metadata: Record<string, unknown> = {
+      uploadedFile: activeDataSource?.name,
+      querySequence,
+      extractedNumbers: patternParse.extractedNumbers,
+      isLikelyPatternRequest: patternParse.isLikelyPatternRequest,
+    };
 
-    if (querySequence.length === 4) {
-      if (readableData) {
-        patternMatches = findPatternMatches(
-          buildReadableDataHistoryPoints(readableData),
-          querySequence,
-        );
+    if (querySequence) {
+      metadata.provider = "deterministic-pattern-matcher";
+
+      if (!activeDataSource) {
+        finalResponse =
+          "Pattern nikalne ke liye pehle Excel ya CSV upload karo.";
       } else {
-        const historyDocs = await TimeSeriesData.find({
-          dataSourceId: activeDataSource._id,
-        })
-          .sort({ tag: 1, date: 1 })
-          .select("tag date value -_id");
-        const historyPoints: HistoryPoint[] = historyDocs.map((doc) => ({
-          tag: doc.tag,
-          date: doc.date,
-          value: doc.value,
-        }));
+        if (readableData) {
+          patternMatches = findPatternMatches(
+            buildReadableDataHistoryPoints(readableData),
+            querySequence,
+          );
+        } else {
+          const historyDocs = await TimeSeriesData.find({
+            dataSourceId: activeDataSource._id,
+          })
+            .sort({ tag: 1, date: 1 })
+            .select("tag date value -_id");
+          const historyPoints: HistoryPoint[] = historyDocs.map((doc) => ({
+            tag: doc.tag,
+            date: doc.date,
+            value: doc.value,
+          }));
 
-        patternMatches = findPatternMatches(historyPoints, querySequence);
+          patternMatches = findPatternMatches(historyPoints, querySequence);
+        }
+
+        finalResponse = buildPatternAnswer(patternMatches, {
+          isRowGridSource,
+        });
+      }
+    } else {
+      metadata.provider = "gemini";
+
+      try {
+        finalResponse = await generateGeminiAnswer({
+          userText,
+          dataSource: activeDataSource,
+          patternParse,
+        });
+      } catch (geminiError) {
+        const errorDetails = getGeminiErrorDetails(geminiError);
+        logger.error(
+          "Gemini message generation failed",
+          geminiError,
+          errorDetails,
+        );
+        metadata.providerError = true;
+        metadata.statusCode = errorDetails.statusCode;
+        metadata.retryAfterMs = errorDetails.retryAfterMs;
+        metadata.isQuotaExceeded = errorDetails.isQuotaExceeded;
+        finalResponse = buildGeminiFallbackMessage(geminiError);
       }
     }
-    const finalResponse =
-      querySequence.length === 4
-        ? buildPatternAnswer(patternMatches, {
-            isRowGridSource,
-          })
-        : "Exactly 4 numbers provide karo";
     const type = "text";
-    const metadata = {
-      provider: "deterministic-pattern-matcher",
-      uploadedFile: activeDataSource.name,
-      querySequence,
-    };
 
     const assistantMsg = await Message.create({
       chatId: chat._id,

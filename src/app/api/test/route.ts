@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import * as XLSX from "xlsx";
-
 interface NumericPoint {
   rowNumber: number;
   sheetRowIndex: number;
   value: number;
 }
-
 interface PatternMatch {
   sheetName: string;
   columnIndex: number;
@@ -16,7 +14,6 @@ interface PatternMatch {
   value: number;
   matchType: "fixed-gap" | "growing-gap" | "decreasing-gap";
 }
-
 const MONTH_MAP: Record<string, number> = {
   JAN: 1,
   JANUARY: 1,
@@ -51,13 +48,11 @@ const MONTH_MAP: Record<string, number> = {
   DECEMBER: 12,
   DECE: 12,
 };
-
 function extractNumericSequence(text: string): number[] {
   return Array.from(text.matchAll(/-?\d+(?:\.\d+)?/g)).map((match) =>
     Number(match[0]),
   );
 }
-
 function toNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -75,7 +70,6 @@ function toNumber(value: unknown): number | null {
   const numericValue = Number(cleaned);
   return Number.isFinite(numericValue) ? numericValue : null;
 }
-
 function isDateLike(value: unknown): boolean {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return true;
@@ -92,28 +86,22 @@ function isDateLike(value: unknown): boolean {
 
   return !Number.isNaN(Date.parse(trimmed));
 }
-
 function isYear(value: unknown): boolean {
   const year = Number(value);
   return Number.isInteger(year) && year >= 1900 && year <= 2100;
 }
-
 function isMonth(value: unknown): boolean {
   return typeof value === "string" && MONTH_MAP[value.toUpperCase()] !== undefined;
 }
-
 function getMonthNumber(value: unknown): number | null {
   if (typeof value === "number" && value >= 1 && value <= 12) {
     return value;
   }
-
   if (typeof value !== "string") {
     return null;
   }
-
   return MONTH_MAP[value.toUpperCase()] ?? null;
 }
-
 function isHeaderRow(row: unknown[] = []): boolean {
   const populatedCells = row.filter((cell) => cell !== null && cell !== "");
   if (populatedCells.length === 0) {
@@ -126,11 +114,9 @@ function isHeaderRow(row: unknown[] = []): boolean {
 
   return textCells.length >= Math.ceil(populatedCells.length / 2);
 }
-
 function getMaxColumnCount(rows: unknown[][]): number {
   return Math.max(...rows.map((row) => row.length), 0);
 }
-
 function findLabelColumn(rows: unknown[][], headerOffset: number): number | null {
   const maxCols = getMaxColumnCount(rows);
   const headerRow = headerOffset > 0 ? rows[0] || [] : [];
@@ -171,7 +157,6 @@ function findLabelColumn(rows: unknown[][], headerOffset: number): number | null
 
   return bestColumn?.colIndex ?? null;
 }
-
 function formatLabel(value: unknown, fallbackRow: number): string {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     const day = value.getUTCDate();
@@ -206,7 +191,6 @@ function formatLabel(value: unknown, fallbackRow: number): string {
 
   return `Row ${fallbackRow}`;
 }
-
 function formatDateParts(year: number, month: number, day: number): string {
   const date = new Date(Date.UTC(year, month - 1, day));
 
@@ -226,11 +210,9 @@ function formatDateParts(year: number, month: number, day: number): string {
 
   return `${day} ${monthName} ${year}`;
 }
-
 function getCellValueByRow(points: NumericPoint[]): Map<number, number> {
   return new Map(points.map((point) => [point.rowNumber, point.value]));
 }
-
 function findFixedGapMatch(
   points: NumericPoint[],
   sequence: number[],
@@ -264,7 +246,6 @@ function findFixedGapMatch(
 
   return null;
 }
-
 function findGrowingGapMatch(
   points: NumericPoint[],
   sequence: number[],
@@ -300,7 +281,6 @@ function findGrowingGapMatch(
 
   return null;
 }
-
 function findDecreasingGapMatch(
   points: NumericPoint[],
   sequence: number[],
@@ -346,7 +326,6 @@ function findDecreasingGapMatch(
 
   return null;
 }
-
 function buildColumnPoints(
   rows: unknown[][],
   columnIndex: number,
@@ -369,7 +348,6 @@ function buildColumnPoints(
 
   return points;
 }
-
 function looksLikeMonthGrid(rows: unknown[][]): boolean {
   if (rows.length < 4) {
     return false;
@@ -383,7 +361,6 @@ function looksLikeMonthGrid(rows: unknown[][]): boolean {
 
   return yearHeaderCount > 0 && monthHeaderCount > 0 && tagHeaderCount > 0;
 }
-
 function fillMonthGridHeaders(rows: unknown[][]): {
   years: Array<number | null>;
   months: Array<number | null>;
@@ -444,7 +421,6 @@ function fillMonthGridHeaders(rows: unknown[][]): {
 
   return { years, months, lastColumnIndex };
 }
-
 function buildMonthGridColumnPoints(
   rows: unknown[][],
   columnIndex: number,
@@ -466,7 +442,6 @@ function buildMonthGridColumnPoints(
 
   return points;
 }
-
 function findMonthGridMatches(
   sheetName: string,
   rows: unknown[][],
@@ -516,7 +491,6 @@ function findMonthGridMatches(
 
   return matches;
 }
-
 function findWorkbookMatches(
   workbook: XLSX.WorkBook,
   sequence: number[],
@@ -535,7 +509,6 @@ function findWorkbookMatches(
       matches.push(...findMonthGridMatches(sheetName, rows, sequence));
       continue;
     }
-
     const headerOffset = isHeaderRow(rows[0]) ? 1 : 0;
     const labelColumn = findLabelColumn(rows, headerOffset);
     const maxCols = getMaxColumnCount(rows);
@@ -581,11 +554,9 @@ function findWorkbookMatches(
 
   return matches;
 }
-
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(8)));
 }
-
 function buildAnswer(matches: PatternMatch[]): string {
   if (matches.length === 0) {
     return "Ye pattern nhi mila";
@@ -598,7 +569,6 @@ function buildAnswer(matches: PatternMatch[]): string {
 
   return [`Ye pattern ${visibleMatches.length} jgh mila hai :`, ...lines].join("\n");
 }
-
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
