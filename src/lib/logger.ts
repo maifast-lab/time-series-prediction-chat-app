@@ -34,7 +34,7 @@ const log = (level: LogLevel, message: string, data?: unknown) => {
         console.warn(...args);
         break;
       case 'debug':
-        console.debug(...args);
+        console.log('[debug]', ...args);
         break;
       default:
         console.log(...args);

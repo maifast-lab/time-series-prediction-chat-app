@@ -1,17 +1,15 @@
 'use client';
 
-import { SessionProvider } from 'next-auth/react';
-
 import { ThemeProvider } from '@/components/ThemeProvider';
 import ThemeToggle from '@/components/ThemeToggle';
+import { Toaster } from '@/components/ui/sonner';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider>
-      <ThemeProvider>
-        {children}
-        <ThemeToggle />
-      </ThemeProvider>
-    </SessionProvider>
+    <ThemeProvider>
+      {children}
+      <Toaster position='top-right' richColors closeButton />
+      <ThemeToggle />
+    </ThemeProvider>
   );
 }

@@ -2,38 +2,37 @@ import { notFound, redirect } from 'next/navigation';
 
 import ChatPageClient from '@/components/ChatPageClient';
 import MainLayout from '@/components/MainLayout';
-import { getChatPageDataForCurrentUser, getChatsForCurrentUser } from '@/lib/server/chat';
-import { NotFoundError, UnauthorizedError } from '@/lib/server/errors';
+import type { ChatPageData, ChatsOverviewData } from '@/lib/chat-types';
+import { ServerApiError, requestServerApi } from '@/lib/server/api-client';
+import { requireServerAuthState } from '@/lib/server/auth';
 
 interface ChatPageProps {
   params: Promise<{ id: string }>;
 }
 
 async function loadChatPageData(id: string) {
+  await requireServerAuthState();
   try {
     return await Promise.all([
-      getChatPageDataForCurrentUser(id),
-      getChatsForCurrentUser(),
+      requestServerApi<ChatPageData>(`/api/chats/${id}`),
+      requestServerApi<ChatsOverviewData>('/api/chats'),
     ]);
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
+    if (error instanceof ServerApiError && error.status === 401) {
       redirect('/login');
     }
 
-    if (error instanceof NotFoundError) {
+    if (error instanceof ServerApiError && error.status === 404) {
       notFound();
     }
-
     throw error;
   }
 }
-
 export default async function ChatPage({ params }: ChatPageProps) {
   const { id } = await params;
-  const [chatPageData, chats] = await loadChatPageData(id);
-
+  const [chatPageData, chatsResponse] = await loadChatPageData(id);
   return (
-    <MainLayout initialChats={chats}>
+    <MainLayout initialChats={chatsResponse.chats}>
       <ChatPageClient
         initialChat={chatPageData.chat}
         initialMessages={chatPageData.messages}

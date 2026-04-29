@@ -1,18 +1,52 @@
+import { Sparkles, FileSpreadsheet, ShieldCheck } from 'lucide-react';
 import { redirect } from 'next/navigation';
-import Image from 'next/image';
-import { MessageSquare, Sparkles } from 'lucide-react';
 
-import MainLayout from '@/components/MainLayout';
+import { AppLogo } from '@/components/AppLogo';
+import { AppPanel, PageBody, PageContainer, SectionTag } from '@/components/AppPage';
 import CreateChatButton from '@/components/CreateChatButton';
-import { getChatsForCurrentUser, getLatestChatIdForCurrentUser } from '@/lib/server/chat';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import MainLayout from '@/components/MainLayout';
+import type { ChatsOverviewData } from '@/lib/chat-types';
+import { ServerApiError, requestServerApi } from '@/lib/server/api-client';
+import { requireServerAuthState } from '@/lib/server/auth';
 
-import logoImg from './logo.jpg';
+export const dynamic = 'force-dynamic';
+
+const highlights = [
+  {
+    title: 'Focused chat threads',
+    description: 'Keep each dataset and analysis flow inside its own clean conversation.',
+    icon: Sparkles,
+  },
+  {
+    title: 'Spreadsheet-ready',
+    description: 'Upload CSV or Excel files from the sidebar and ask questions against them.',
+    icon: FileSpreadsheet,
+  },
+  {
+    title: 'Secure access',
+    description: 'Google sign-in tokens stay aligned across the browser and server routes.',
+    icon: ShieldCheck,
+  },
+];
+
+async function loadHomeChatsOverview() {
+  await requireServerAuthState();
+
+  try {
+    return await requestServerApi<ChatsOverviewData>('/api/chats');
+  } catch (error) {
+    if (error instanceof ServerApiError && error.status === 401) {
+      redirect('/login');
+    }
+
+    throw error;
+  }
+}
 
 export default async function Home() {
-  const [latestChatId, chats] = await Promise.all([
-    getLatestChatIdForCurrentUser(),
-    getChatsForCurrentUser(),
-  ]);
+  const chatsData = await loadHomeChatsOverview();
+  const { chats, latestChatId } = chatsData;
 
   if (latestChatId) {
     redirect(`/c/${latestChatId}`);
@@ -20,50 +54,54 @@ export default async function Home() {
 
   return (
     <MainLayout initialChats={chats}>
-      <div className='flex-1 flex flex-col items-center justify-center p-6 text-center'>
-        <div className='max-w-2xl'>
-          <div className='w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-slate-200 dark:border-white/10 overflow-hidden shadow-2xl shadow-blue-500/20'>
-            <Image
-              src={logoImg}
-              alt='Maifast Logo'
-              className='w-full h-full object-cover'
-            />
-          </div>
+      <PageBody>
+        <PageContainer className='max-w-5xl'>
+          <AppPanel className='rounded-[34px] text-center'>
+            <CardHeader className='items-center px-6 pt-8 text-center sm:px-10 sm:pt-10'>
+              <AppLogo size='lg' />
+              <SectionTag className='mt-5'>AI spreadsheet assistant</SectionTag>
+              <CardTitle className='mt-4 text-4xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-5xl'>
+                Turn uploaded sheets into guided conversations.
+              </CardTitle>
+              <CardDescription className='max-w-2xl text-base leading-7 text-slate-600 dark:text-slate-300'>
+                Maifast gives you a consistent workspace for uploading data,
+                asking natural-language questions, and keeping every answer tied
+                to the right chat.
+              </CardDescription>
+            </CardHeader>
 
-          <h1 className='text-4xl font-bold text-slate-900 dark:text-white mb-4 tracking-tight text-center md:text-5xl'>
-            Welcome to <span className='text-blue-500'>Maifast</span>
-          </h1>
-          <p className='text-slate-600 dark:text-gray-400 text-lg mb-10 leading-relaxed font-light mx-auto max-w-lg'>
-            Your premium AI companion for intelligent conversations, task
-            automation, and instant insights.
-          </p>
-
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-left'>
-            <div className='p-6 rounded-2xl bg-white/80 border border-slate-200 shadow-sm shadow-slate-200/70 hover:bg-white transition-colors dark:bg-white/5 dark:border-white/10 dark:shadow-none dark:hover:bg-white/10'>
-              <MessageSquare className='w-6 h-6 text-blue-400 mb-3' />
-              <div className='text-slate-900 dark:text-white font-semibold mb-1'>
-                Natural Conversations
+            <CardContent className='px-6 pb-8 sm:px-10 sm:pb-10'>
+              <div className='flex justify-center'>
+                <CreateChatButton
+                  size='lg'
+                  className='rounded-2xl px-6 shadow-lg shadow-blue-950/15'
+                >
+                  Start your first conversation
+                </CreateChatButton>
               </div>
-              <p className='text-xs text-slate-500 dark:text-gray-500'>
-                Chat naturally with an AI that understands context and detail.
-              </p>
-            </div>
-            <div className='p-6 rounded-2xl bg-white/80 border border-slate-200 shadow-sm shadow-slate-200/70 hover:bg-white transition-colors dark:bg-white/5 dark:border-white/10 dark:shadow-none dark:hover:bg-white/10'>
-              <Sparkles className='w-6 h-6 text-purple-400 mb-3' />
-              <div className='text-slate-900 dark:text-white font-semibold mb-1'>
-                Instant Insights
-              </div>
-              <p className='text-xs text-slate-500 dark:text-gray-500'>
-                Get answers, creative ideas, and technical help in seconds.
-              </p>
-            </div>
-          </div>
 
-          <CreateChatButton className='mt-12 px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95 disabled:opacity-60'>
-            Start Your First Conversation
-          </CreateChatButton>
-        </div>
-      </div>
+              <div className='mt-8 grid gap-3 text-left md:grid-cols-3'>
+                {highlights.map(({ title, description, icon: Icon }) => (
+                  <div
+                    key={title}
+                    className='rounded-[24px] border border-slate-200/80 bg-slate-50/85 p-5 dark:border-white/10 dark:bg-white/5'
+                  >
+                    <div className='flex size-11 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-200'>
+                      <Icon className='size-5' />
+                    </div>
+                    <h2 className='mt-4 text-base font-semibold text-slate-950 dark:text-white'>
+                      {title}
+                    </h2>
+                    <p className='mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400'>
+                      {description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </AppPanel>
+        </PageContainer>
+      </PageBody>
     </MainLayout>
   );
 }

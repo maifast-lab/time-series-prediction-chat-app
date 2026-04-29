@@ -24,3 +24,23 @@ export interface ChatPageData {
   hasUploadedData: boolean;
   activeDataSourceName: string;
 }
+
+export interface ChatsOverviewData {
+  chats: ChatSummary[];
+  latestChatId: string | null;
+}
+
+export interface SendChatMessageResult {
+  message: ChatMessage;
+  chatTitle: string | null;
+}
+
+export interface UploadDataSourceResult {
+  message: string;
+  chatId: string | null;
+  dataSourceId: string;
+  fileName: string;
+  points: number;
+  tags: number;
+  sheetJsonPreview: unknown;
+}
