@@ -29,7 +29,7 @@ export default function LoginPage() {
 
   if (status === "loading") {
     return (
-      <div className="h-screen w-full bg-[#0a0f1e] flex items-center justify-center">
+      <div className="h-screen w-full flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
       </div>
     );
@@ -39,7 +39,7 @@ export default function LoginPage() {
   const hasLocalDevProvider = providerIds.includes("credentials");
 
   return (
-    <div className="h-screen w-full bg-[#0a0f1e] text-gray-100 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+    <div className="h-screen w-full text-slate-900 dark:text-gray-100 flex flex-col items-center justify-center p-4 relative overflow-hidden">
       {/* Decorative background elements */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[120px] pointer-events-none" />
@@ -48,17 +48,17 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl relative z-10"
+        className="w-full max-w-md bg-white/80 dark:bg-white/5 backdrop-blur-xl border border-slate-200 dark:border-white/10 p-8 rounded-3xl shadow-2xl shadow-slate-200/70 dark:shadow-black/20 relative z-10"
       >
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 shadow-2xl shadow-blue-500/20 overflow-hidden border border-white/10">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 shadow-2xl shadow-blue-500/20 overflow-hidden border border-slate-200 dark:border-white/10">
             <Image
               src={logoImg}
               alt="Maifast Logo"
               className="w-full h-full object-cover"
             />
           </div>
-          <p className="text-gray-400 text-center">
+          <p className="text-slate-600 dark:text-gray-400 text-center">
             Log in to access your personal AI assistant and custom data
             insights.
           </p>
@@ -88,30 +88,30 @@ export default function LoginPage() {
                 callbackUrl: "/",
               })
             }
-            className="mt-4 w-full flex items-center justify-center px-6 py-4 rounded-2xl border border-blue-400/30 bg-blue-500/10 text-blue-100 font-semibold hover:bg-blue-500/15 transition-all duration-300"
+            className="mt-4 w-full flex items-center justify-center px-6 py-4 rounded-2xl border border-blue-400/30 bg-blue-500/10 text-blue-700 dark:text-blue-100 font-semibold hover:bg-blue-500/15 transition-all duration-300"
           >
             Continue in Local Dev Mode
           </button>
         ) : null}
 
         {!hasGoogleProvider && hasLocalDevProvider ? (
-          <p className="mt-4 text-sm text-blue-200/70 text-center">
+          <p className="mt-4 text-sm text-blue-700/70 dark:text-blue-200/70 text-center">
             Google OAuth is not fully configured for this local environment, so
             the dev login button is enabled.
           </p>
         ) : null}
 
-        <div className="mt-8 pt-6 border-t border-white/5 text-center">
-          <p className="text-sm text-gray-500 flex items-center justify-center gap-1">
+        <div className="mt-8 pt-6 border-t border-slate-200 dark:border-white/5 text-center">
+          <p className="text-sm text-slate-500 dark:text-gray-500 flex items-center justify-center gap-1">
             Secure, professional-grade AI platform.
           </p>
         </div>
       </motion.div>
 
-      <div className="mt-8 text-gray-500 text-sm font-medium tracking-widest uppercase flex items-center gap-4">
-        <div className="h-[1px] w-8 bg-gray-500/30" />
+      <div className="mt-8 text-slate-500 dark:text-gray-500 text-sm font-medium tracking-widest uppercase flex items-center gap-4">
+        <div className="h-[1px] w-8 bg-slate-400/30 dark:bg-gray-500/30" />
         Powering human-data interaction
-        <div className="h-[1px] w-8 bg-gray-500/30" />
+        <div className="h-[1px] w-8 bg-slate-400/30 dark:bg-gray-500/30" />
       </div>
     </div>
   );
