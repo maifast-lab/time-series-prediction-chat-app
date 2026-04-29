@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   Plus,
@@ -12,6 +12,8 @@ import {
   LogOut,
   LogIn,
   Download,
+  Ellipsis,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession, signIn, signOut } from 'next-auth/react';
@@ -34,12 +36,15 @@ export default function MainLayout({
   initialChats,
 }: MainLayoutProps) {
   const [chats, setChats] = useState(initialChats);
+  const [isFileMenuOpen, setIsFileMenuOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [uploadStep, setUploadStep] = useState<
     'idle' | 'analyzing' | 'processing' | 'success' | 'error'
   >('idle');
   const [progressMsg, setProgressMsg] = useState('');
   const [isCreatingChat, startCreateTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
 
   const { data: session } = useSession();
   const router = useRouter();
@@ -54,6 +59,31 @@ export default function MainLayout({
   useEffect(() => {
     setChats(initialChats);
   }, [initialChats]);
+
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (
+        fileMenuRef.current &&
+        !fileMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsFileMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsFileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
 
   async function handleDelete(event: React.MouseEvent, chatId: string) {
     event.stopPropagation();
@@ -244,32 +274,78 @@ export default function MainLayout({
               <div className='p-4 border-t border-white/5'>
                 <div className='text-[10px] font-bold text-slate-500 dark:text-gray-500 px-3 py-2 uppercase tracking-[0.2em] flex justify-between items-center'>
                   Files & Data
-                  <label
-                    className={cn(
-                      'cursor-pointer hover:text-blue-400 transition-colors',
-                      !session && 'opacity-50 cursor-not-allowed',
-                    )}
-                  >
-                    <Upload className='w-3 h-3' />
-                    <input
-                      type='file'
-                      accept='.xlsx,.xls,.csv'
-                      className='hidden'
-                      onChange={handleFileUpload}
-                      disabled={!session}
-                    />
-                  </label>
                 </div>
 
-                <div className='px-2 py-2'>
-                  <a
-                    href='/dummy.csv'
-                    download='dummy.csv'
-                    className='mb-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 bg-white/85 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 hover:border-blue-500/40 text-[11px] font-medium text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white transition-all'
-                  >
-                    <Download className='w-3.5 h-3.5' />
-                    <span>Download Dummy CSV</span>
-                  </a>
+                <div className='px-2 py-2 space-y-3'>
+                  <div className='relative' ref={fileMenuRef}>
+                    <button
+                      type='button'
+                      onClick={() => setIsFileMenuOpen((open) => !open)}
+                      className='w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white/85 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 hover:border-blue-500/40 text-[11px] font-medium text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white transition-all'
+                    >
+                      <span className='flex items-center gap-2'>
+                        <FileSpreadsheet className='w-3.5 h-3.5' />
+                        <span>Sheet Actions</span>
+                      </span>
+                      <Ellipsis className='w-3.5 h-3.5' />
+                    </button>
+
+                    {isFileMenuOpen && (
+                      <div className='absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl shadow-xl shadow-slate-200/70 dark:shadow-black/30 overflow-hidden'>
+                        <input
+                          ref={fileInputRef}
+                          type='file'
+                          accept='.xlsx,.xls,.csv'
+                          className='hidden'
+                          onChange={handleFileUpload}
+                          disabled={!session}
+                        />
+
+                        <button
+                          type='button'
+                          disabled={!session}
+                          onClick={() => {
+                            setIsFileMenuOpen(false);
+                            fileInputRef.current?.click();
+                          }}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-3 py-3 text-left text-xs transition-colors',
+                            session
+                              ? 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5'
+                              : 'text-slate-400 dark:text-slate-500 cursor-not-allowed',
+                          )}
+                        >
+                          <Upload className='w-3.5 h-3.5' />
+                          <span>Upload New File</span>
+                        </button>
+
+                        <a
+                          href='/dummy.csv'
+                          download='dummy.csv'
+                          onClick={() => setIsFileMenuOpen(false)}
+                          className='flex items-center gap-2 px-3 py-3 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors'
+                        >
+                          <Download className='w-3.5 h-3.5' />
+                          <span>Download Dummy CSV</span>
+                        </a>
+
+                        <button
+                          type='button'
+                          onClick={() => {
+                            setIsFileMenuOpen(false);
+                            router.push('/edit/sheet');
+                            if (window.innerWidth < 768) {
+                              setIsSidebarOpen(false);
+                            }
+                          }}
+                          className='w-full flex items-center gap-2 px-3 py-3 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors'
+                        >
+                          <FileSpreadsheet className='w-3.5 h-3.5' />
+                          <span>Edit Current File</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   {uploadStep !== 'idle' ? (
                     <div
@@ -311,8 +387,8 @@ export default function MainLayout({
                     </div>
                   ) : (
                     <p className='text-[10px] text-slate-500 dark:text-gray-500 px-3 leading-relaxed'>
-                      Upload Excel or CSV first. Chat stays locked until sheet
-                      data is ready.
+                      Open sheet actions to upload a file, download the sample,
+                      or move to the sheet editor.
                     </p>
                   )}
                 </div>

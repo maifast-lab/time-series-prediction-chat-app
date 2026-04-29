@@ -1,5 +1,4 @@
 'use server';
-
 import { logger } from '@/lib/logger';
 import { createChatForCurrentUser, deleteChatForCurrentUser, sendChatMessageForCurrentUser } from '@/lib/server/chat';
 import { getActionErrorMessage } from '@/lib/server/errors';
