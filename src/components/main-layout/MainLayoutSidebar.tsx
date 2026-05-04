@@ -17,6 +17,7 @@ interface MainLayoutSidebarProps {
   isCreatingChat: boolean;
   chats: ChatSummary[];
   activeChatId: string | null;
+  isSuggestionPage: boolean;
   uploadStep: UploadStep;
   progressMessage: string;
   authState: StoredAuthState | null;
@@ -30,6 +31,7 @@ interface MainLayoutSidebarProps {
   onUploadFile: ChangeEventHandler<HTMLInputElement>;
   onDownloadSample: () => void;
   onOpenSheetEditor: () => void;
+  onOpenSuggestionPage: () => void;
   onOpenSignIn: () => void;
   onSignOut: () => void;
 }
@@ -39,6 +41,7 @@ export default function MainLayoutSidebar({
   isCreatingChat,
   chats,
   activeChatId,
+  isSuggestionPage,
   uploadStep,
   progressMessage,
   authState,
@@ -52,6 +55,7 @@ export default function MainLayoutSidebar({
   onUploadFile,
   onDownloadSample,
   onOpenSheetEditor,
+  onOpenSuggestionPage,
   onOpenSignIn,
   onSignOut,
 }: MainLayoutSidebarProps) {
@@ -93,6 +97,8 @@ export default function MainLayoutSidebar({
               onUploadFile={onUploadFile}
               onDownloadSample={onDownloadSample}
               onOpenSheetEditor={onOpenSheetEditor}
+              onOpenSuggestionPage={onOpenSuggestionPage}
+              isSuggestionPage={isSuggestionPage}
               uploadStep={uploadStep}
               progressMessage={progressMessage}
             />

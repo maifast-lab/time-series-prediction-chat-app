@@ -10,6 +10,7 @@ import {
   Download,
   Ellipsis,
   FileSpreadsheet,
+  Lightbulb,
   Sparkles,
   Upload,
 } from 'lucide-react';
@@ -22,6 +23,8 @@ interface SidebarFileActionsProps {
   onUploadFile: ChangeEventHandler<HTMLInputElement>;
   onDownloadSample: () => void;
   onOpenSheetEditor: () => void;
+  onOpenSuggestionPage: () => void;
+  isSuggestionPage: boolean;
   uploadStep: UploadStep;
   progressMessage: string;
 }
@@ -30,6 +33,8 @@ export default function SidebarFileActions({
   onUploadFile,
   onDownloadSample,
   onOpenSheetEditor,
+  onOpenSuggestionPage,
+  isSuggestionPage,
   uploadStep,
   progressMessage,
 }: SidebarFileActionsProps) {
@@ -65,7 +70,7 @@ export default function SidebarFileActions({
   return (
     <div className='border-t border-white/5 p-4'>
       <div className='flex items-center justify-between px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500'>
-        Files & Data
+        Workspace Tools
       </div>
 
       <div className='space-y-3 px-2 py-2'>
@@ -145,6 +150,29 @@ export default function SidebarFileActions({
           )}
         </div>
 
+        <button
+          type='button'
+          onClick={onOpenSuggestionPage}
+          className={cn(
+            'w-full rounded-xl border px-3 py-3 text-left transition-all',
+            isSuggestionPage
+              ? 'border-amber-500/30 bg-amber-500/10 text-slate-950 shadow-sm shadow-amber-500/10 dark:text-white'
+              : 'border-slate-200 bg-white/85 text-slate-700 hover:border-amber-500/30 hover:bg-white hover:text-slate-950 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white',
+          )}
+        >
+          <span className='flex items-start gap-3'>
+            <span className='mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:bg-amber-400/10 dark:text-amber-200'>
+              <Lightbulb className='h-4 w-4' />
+            </span>
+            <span className='flex min-w-0 flex-col'>
+              <span className='text-sm font-semibold'>Share Suggestion</span>
+              <span className='mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400'>
+                Open the feedback page and post a title with description.
+              </span>
+            </span>
+          </span>
+        </button>
+
         {uploadStep !== 'idle' ? (
           <div
             className={cn(
@@ -183,8 +211,8 @@ export default function SidebarFileActions({
           </div>
         ) : (
           <p className='px-3 text-[10px] leading-relaxed text-slate-500 dark:text-gray-500'>
-            Open sheet actions to upload a file, download the sample, or move
-            to the sheet editor.
+            Open sheet actions, share a product suggestion, or move to the
+            sheet editor.
           </p>
         )}
       </div>

@@ -19,10 +19,8 @@ export default async function EditSheetPage() {
     if (error instanceof ServerApiError && error.status === 401) {
       redirect('/login');
     }
-
     throw error;
   }
-
   return (
     <MainLayout initialChats={chats}>
       <PageBody>

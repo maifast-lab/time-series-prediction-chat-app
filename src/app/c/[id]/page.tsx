@@ -1,5 +1,4 @@
 import { notFound, redirect } from 'next/navigation';
-
 import ChatPageClient from '@/components/ChatPageClient';
 import MainLayout from '@/components/MainLayout';
 import type { ChatPageData, ChatsOverviewData } from '@/lib/chat-types';
