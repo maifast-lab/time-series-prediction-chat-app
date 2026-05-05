@@ -3,7 +3,6 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-
 import MainLayoutSidebar from '@/components/main-layout/MainLayoutSidebar';
 import SidebarToggleButton from '@/components/main-layout/SidebarToggleButton';
 import type { UploadStep } from '@/components/main-layout/types';
