@@ -7,6 +7,10 @@ import ChatComposer from '@/components/chat-page/ChatComposer';
 import ChatHeader from '@/components/chat-page/ChatHeader';
 import ChatMessagesPane from '@/components/chat-page/ChatMessagesPane';
 import { ApiClientError, requestApi } from '@/lib/api-client';
+import {
+  CHAT_RENAMED_EVENT,
+  DATA_SOURCE_UPLOADED_EVENT,
+} from '@/lib/app-events';
 import type {
   ChatPageData,
   ChatMessage,
@@ -69,9 +73,9 @@ export default function ChatPageClient({
       setHasUploadedData(true);
     }
 
-    window.addEventListener('datasource-uploaded', handleDataUpload);
+    window.addEventListener(DATA_SOURCE_UPLOADED_EVENT, handleDataUpload);
     return () =>
-      window.removeEventListener('datasource-uploaded', handleDataUpload);
+      window.removeEventListener(DATA_SOURCE_UPLOADED_EVENT, handleDataUpload);
   }, []);
 
   async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
@@ -124,7 +128,7 @@ export default function ChatPageClient({
         }));
 
         window.dispatchEvent(
-          new CustomEvent('chat-renamed', {
+          new CustomEvent(CHAT_RENAMED_EVENT, {
             detail: {
               chatId: chat._id,
               company: result.chatTitle,

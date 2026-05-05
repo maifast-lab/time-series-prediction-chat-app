@@ -1,4 +1,4 @@
-import MainLayoutClient from '@/components/MainLayoutClient';
+import MainLayoutClient from '@/components/main-layout/MainLayoutClient';
 import type { ChatSummary } from '@/lib/chat-types';
 
 interface MainLayoutProps {

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { AppPanel, PageBody, PageContainer, SectionTag } from '@/components/AppPage';
+import { AppPanel, PageBody, PageContainer, SectionTag } from '@/components/app/AppPage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -103,8 +103,8 @@ export default function SuggestionPageClient() {
               </h1>
               <p className='mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base'>
                 Use this page to send a focused suggestion with a clear title
-                and description. The form starts with your current sample
-                content and posts directly to the backend suggestion endpoint.
+                and description. Submissions post directly to the backend
+                suggestion endpoint.
               </p>
             </div>
           </div>
@@ -121,7 +121,7 @@ export default function SuggestionPageClient() {
                     Suggestion details
                   </h2>
                   <p className='text-sm text-slate-500 dark:text-slate-400'>
-                    Edit the starter content or send it as-is.
+                    Add the change you want to see and why it matters.
                   </p>
                 </div>
               </div>
@@ -166,7 +166,7 @@ export default function SuggestionPageClient() {
 
               <div className='mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
                 <p className='text-sm leading-6 text-slate-500 dark:text-slate-400'>
-                  The live payload preview updates as you edit the form.
+                  Suggestions are sent with your current authenticated session.
                 </p>
 
                 <Button

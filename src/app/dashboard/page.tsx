@@ -7,10 +7,10 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 
-import { AppPanel, PageBody, PageContainer, SectionTag } from '@/components/AppPage';
-import CreateChatButton from '@/components/CreateChatButton';
-import LogoutButton from '@/components/logout-button';
-import MainLayout from '@/components/MainLayout';
+import { AppPanel, PageBody, PageContainer, SectionTag } from '@/components/app/AppPage';
+import CreateChatButton from '@/components/app/CreateChatButton';
+import LogoutButton from '@/components/app/LogoutButton';
+import MainLayout from '@/components/main-layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ChatsOverviewData } from '@/lib/chat-types';
@@ -55,9 +55,8 @@ export default async function DashboardPage() {
                   Welcome back{authState.user?.name ? `, ${authState.user.name}` : ''}.
                 </h1>
                 <p className='mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base'>
-                  Your frontend token state and server-rendered routes are aligned,
-                  so you can move between chat, upload, and dashboard views without
-                  losing context.
+                  Resume recent conversations, upload spreadsheets, and keep
+                  your data questions organized in one workspace.
                 </p>
               </div>
 
@@ -167,14 +166,13 @@ export default async function DashboardPage() {
                   </Button>
 
                   <div className='rounded-[24px] border border-dashed border-slate-300 p-5 text-sm leading-7 text-slate-600 dark:border-white/10 dark:text-slate-300'>
-                    Protected actions use the Google access token returned during
-                    sign-in. Those values are mirrored into browser cookies so
-                    server components can authorize backend requests.
+                    Use the sidebar or sheet editor to upload CSV and Excel
+                    files, then ask questions from the matching conversation.
                   </div>
 
                   <div className='inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200'>
                     <ShieldCheck className='size-3.5' />
-                    Access token loaded
+                    Workspace ready
                   </div>
                 </div>
               </div>

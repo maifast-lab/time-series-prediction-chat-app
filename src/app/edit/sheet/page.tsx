@@ -1,9 +1,9 @@
 import { FileSpreadsheet, Upload } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
-import { AppPanel, PageBody, PageContainer, SectionTag } from '@/components/AppPage';
-import CreateChatButton from '@/components/CreateChatButton';
-import MainLayout from '@/components/MainLayout';
+import { AppPanel, PageBody, PageContainer, SectionTag } from '@/components/app/AppPage';
+import CreateChatButton from '@/components/app/CreateChatButton';
+import MainLayout from '@/components/main-layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import type { ChatsOverviewData } from '@/lib/chat-types';
 import { ServerApiError, requestServerApi } from '@/lib/server/api-client';
@@ -34,9 +34,8 @@ export default async function EditSheetPage() {
                     Prepare the spreadsheet tools.
                   </h1>
                   <p className='mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300 sm:text-base'>
-                    This route is set up as the editor entry point. The sidebar
-                    now uses the same shadcn action styles everywhere, and this
-                    page is ready for the next round of sheet-specific features.
+                    Download a sample CSV or start a new sheet-backed chat. This
+                    workspace is ready for upload preview and editing tools.
                   </p>
                 </div>
 

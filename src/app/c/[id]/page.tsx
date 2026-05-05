@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
-import ChatPageClient from '@/components/ChatPageClient';
-import MainLayout from '@/components/MainLayout';
+import ChatPageClient from '@/components/chat-page/ChatPageClient';
+import MainLayout from '@/components/main-layout/MainLayout';
 import type { ChatPageData, ChatsOverviewData } from '@/lib/chat-types';
 import { ServerApiError, requestServerApi } from '@/lib/server/api-client';
 import { requireServerAuthState } from '@/lib/server/auth';

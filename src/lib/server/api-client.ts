@@ -58,17 +58,6 @@ function isAuthRedirectResponse(response: Response) {
   }
 }
 
-export async function requestServerJson<T>(path: string, init?: RequestInit) {
-  const response = await requestServerResponse(path, init);
-  const body = (await response.json().catch(() => null)) as T | null;
-
-  if (!response.ok) {
-    throw new ServerApiError('Request failed', response.status || 500);
-  }
-
-  return body as T;
-}
-
 export async function requestServerApi<T>(path: string, init?: RequestInit) {
   const response = await requestServerResponse(path, init);
   const body = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-import MainLayout from '@/components/MainLayout';
+import MainLayout from '@/components/main-layout/MainLayout';
 import SuggestionPageClient from '@/components/suggestion-page/SuggestionPageClient';
 import type { ChatsOverviewData } from '@/lib/chat-types';
 import { ServerApiError, requestServerApi } from '@/lib/server/api-client';

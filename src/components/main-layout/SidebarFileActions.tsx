@@ -80,13 +80,7 @@ export default function SidebarFileActions({
             type='file'
             accept='.xlsx,.xls,.csv'
             className='hidden'
-            onChange={(event) => {
-              console.log('File input changed:', {
-                filesSelected: event.target.files?.length ?? 0,
-                firstFileName: event.target.files?.[0]?.name ?? null,
-              });
-              onUploadFile(event);
-            }}
+            onChange={onUploadFile}
           />
 
           <button

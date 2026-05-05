@@ -1,11 +1,11 @@
 import { Sparkles, FileSpreadsheet, ShieldCheck } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
-import { AppLogo } from '@/components/AppLogo';
-import { AppPanel, PageBody, PageContainer, SectionTag } from '@/components/AppPage';
-import CreateChatButton from '@/components/CreateChatButton';
+import { AppLogo } from '@/components/app/AppLogo';
+import { AppPanel, PageBody, PageContainer, SectionTag } from '@/components/app/AppPage';
+import CreateChatButton from '@/components/app/CreateChatButton';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import MainLayout from '@/components/MainLayout';
+import MainLayout from '@/components/main-layout/MainLayout';
 import type { ChatsOverviewData } from '@/lib/chat-types';
 import { ServerApiError, requestServerApi } from '@/lib/server/api-client';
 import { requireServerAuthState } from '@/lib/server/auth';

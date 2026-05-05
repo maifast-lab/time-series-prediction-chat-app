@@ -1,7 +1,7 @@
 'use client';
 
-import { ThemeProvider } from '@/components/ThemeProvider';
-import ThemeToggle from '@/components/ThemeToggle';
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import ThemeToggle from '@/components/providers/ThemeToggle';
 import { Toaster } from '@/components/ui/sonner';
 
 export function Providers({ children }: { children: React.ReactNode }) {

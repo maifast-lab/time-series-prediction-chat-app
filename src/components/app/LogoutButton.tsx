@@ -19,10 +19,8 @@ export default function LogoutButton({
 }: LogoutButtonProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
 
   async function handleLogout() {
-    setErrorMessage('');
     setIsSubmitting(true);
 
     try {
@@ -49,12 +47,8 @@ export default function LogoutButton({
         ) : (
           <LogOut className='h-4 w-4' />
         )}
-        <span>{isSubmitting ? 'Logging Out...' : 'Log Out'}</span>
+        <span>{isSubmitting ? 'Logging out...' : 'Log out'}</span>
       </Button>
-
-      {errorMessage ? (
-        <p className='text-sm text-red-600 dark:text-red-400'>{errorMessage}</p>
-      ) : null}
     </div>
   );
 }
