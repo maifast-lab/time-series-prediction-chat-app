@@ -23,6 +23,10 @@ interface MainLayoutClientProps {
   initialChats: ChatSummary[];
 }
 
+const PYTHON_API_BASE_URL =
+  process.env.NEXT_PUBLIC_PYTHON_BACKEND_URL?.trim() ||
+  "http://127.0.0.1:8000/api/";
+
 function getActiveChatId(params: ReturnType<typeof useParams>) {
   if (typeof params?.id === "string") {
     return params.id;
@@ -32,6 +36,73 @@ function getActiveChatId(params: ReturnType<typeof useParams>) {
   }
   return null;
 }
+
+function resolvePythonApiUrl(path: string) {
+  const normalizedBase = PYTHON_API_BASE_URL.replace(/\/+$/, "");
+  const normalizedPath = path.replace(/^\/+/, "");
+
+  return new URL(normalizedPath, `${normalizedBase}/`).toString();
+}
+
+function buildDataSourceRequest(cleanedData: unknown) {
+  if (cleanedData instanceof FormData || cleanedData instanceof Blob) {
+    return {
+      body: cleanedData,
+    };
+  }
+
+  if (typeof cleanedData === "string") {
+    return {
+      body: cleanedData,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    };
+  }
+
+  return {
+    body: JSON.stringify(cleanedData),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  };
+}
+
+async function cleanUploadedData(formData: FormData) {
+  const response = await fetch(resolvePythonApiUrl("v1/clean_data"), {
+    method: "POST",
+    body: formData,
+  });
+
+  const result = (await response.json().catch(() => null)) as {
+    cleanedData?: unknown;
+    cleaned_data?: unknown;
+    data?: unknown;
+    message?: string;
+    error?: string;
+  } | null;
+
+  if (!response.ok) {
+    const message =
+      result?.error ||
+      result?.message ||
+      response.statusText ||
+      "Request failed";
+    throw new Error(`Data conversion failed: ${message}`);
+  }
+
+  const cleanedData =
+    result?.cleanedData ?? result?.cleaned_data ?? result?.data;
+
+  if (cleanedData === undefined || cleanedData === null) {
+    throw new Error(
+      "Data conversion failed: cleaned data missing in response.",
+    );
+  }
+
+  return cleanedData;
+}
+
 export default function MainLayoutClient({
   children,
   initialChats,
@@ -161,7 +232,6 @@ export default function MainLayoutClient({
         const chat = await requestApi<ChatSummary>("/api/chats", {
           method: "POST",
         });
-
         router.push(`/c/${chat._id}`);
         closeSidebarOnMobile();
       } catch (error) {
@@ -232,79 +302,65 @@ export default function MainLayoutClient({
       console.log("File upload cancelled: no file selected");
       return;
     }
-    const buffer = Buffer.from(await file.arrayBuffer());
-    console.log("File upload initiated", buffer);
+
+    if (!authState?.user?.id) {
+      toast.error("Upload failed", {
+        description: "User ID is missing. Please sign in again.",
+      });
+      event.target.value = "";
+      return;
+    }
+
+    console.log("File upload initiated", {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type || "unknown",
+    });
     const uploadToastId = toast.loading("Uploading file...", {
       description: `${file.name} is being analyzed and attached.`,
-    });
-    console.log("Starting file upload:", {
-      fileName: file.name,
-      fileType: file.type || "unknown",
-      chatId: activeChatId,
     });
     setUploadStep("analyzing");
     setProgressMessage("AI is analyzing format...");
     console.log(authState, "auth state at upload");
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("user_id", authState?.user?.id ?? "");
-
-    if (activeChatId) {
-      formData.append("chatId", activeChatId);
-    }
-
-    
+    formData.append("user_id", authState.user.id);
 
     try {
+      const cleanedData = await cleanUploadedData(formData);
+      setUploadStep("processing");
+      setProgressMessage("Data cleaned successfully. Finalizing upload...");
+      console.log("Data conversion successful:", cleanedData);
+
+      const dataSourceRequest = buildDataSourceRequest(cleanedData);
+
+      // Send cleaned data to the app backend after Python processing finishes.
       await requestApi("/api/data-sources", {
         method: "POST",
-        body: formData,
+        headers: dataSourceRequest.headers,
+        body: dataSourceRequest.body,
       });
+      const successMessage = `${file.name} was cleaned successfully.`;
 
-      setUploadStep("processing");
-      setProgressMessage("Bulk mapping 100% complete...");
+      toast.success("Upload complete", {
+        id: uploadToastId,
+        description: successMessage,
+      });
+      setUploadStep("success");
+      setProgressMessage(successMessage);
 
-      window.setTimeout(() => {
-        const successMessage = activeChatId
-          ? `${file.name} is now linked to this chat.`
-          : `${file.name} is ready for AI chat.`;
-
-        console.log("File upload completed:", {
-          fileName: file.name,
-          chatId: activeChatId,
-        });
-
-        setUploadStep("success");
-        setProgressMessage(successMessage);
-        toast.success("Upload complete", {
-          id: uploadToastId,
-          description: successMessage,
-        });
-        window.setTimeout(() => setUploadStep("idle"), 3000);
-        router.refresh();
-        window.dispatchEvent(new Event("datasource-uploaded"));
-      }, 800);
+      window.setTimeout(() => setUploadStep("idle"), 3000);
+      router.refresh();
+      window.dispatchEvent(new Event("datasource-uploaded"));
     } catch (error) {
-      if (redirectToLoginIfUnauthorized(error)) {
-        toast.dismiss(uploadToastId);
-        setUploadStep("idle");
-        return;
-      }
-
-      if (error instanceof ApiClientError) {
-        logHandledApiFailure("Upload failed", error);
-      } else {
-        logger.error("Upload failed", error);
-      }
-
       const errorMessage =
-        error instanceof Error ? error.message : "Network error.";
+        error instanceof Error ? error.message : "Data conversion failed.";
 
-      console.error("File upload failed:", {
+      logger.error("Data conversion error", error, {
         fileName: file.name,
         chatId: activeChatId,
-        error: errorMessage,
       });
+      console.error("Data conversion error:", error);
 
       setUploadStep("error");
       setProgressMessage(errorMessage);

@@ -29,8 +29,6 @@ export default function SuggestionPageClient() {
   const router = useRouter();
   const [formValues, setFormValues] =
     useState<SuggestionPayload>(INITIAL_SUGGESTION);
-  const [lastSubmittedSuggestion, setLastSubmittedSuggestion] =
-    useState<SuggestionPayload | null>(null);
   const [isSubmitting, startSubmitTransition] = useTransition();
 
   function updateField(field: keyof SuggestionPayload, value: string) {
@@ -66,7 +64,6 @@ export default function SuggestionPageClient() {
         });
 
         setFormValues(payload);
-        setLastSubmittedSuggestion(payload);
         toast.success('Suggestion shared.', {
           description: 'Your feedback was sent to the suggestion endpoint.',
         });
