@@ -22,56 +22,65 @@ import {
   getStoredAuth,
   loadGoogleIdentityScript,
 } from '@/lib/auth-client';
-import { ApiClientError, requestApi } from '@/lib/api-client';
-import type { ChatsOverviewData } from '@/lib/chat-types';
-
+import { ApiClientError } from '@/lib/api-client';
+import { useChatsOverviewQuery } from '@/lib/api-hooks';
 export default function LoginPage() {
   const googleButtonRef = useRef<HTMLDivElement>(null);
 
+  const [hasStoredAuth] = useState(() => Boolean(getStoredAuth()));
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [googleReady, setGoogleReady] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [authError, setAuthError] = useState('');
+  const savedSessionQuery = useChatsOverviewQuery({
+    enabled: hasStoredAuth,
+  });
 
   useEffect(() => {
-    async function checkAuth() {
-      const storedAuth = getStoredAuth();
+    if (!hasStoredAuth) {
+      setCheckingAuth(false);
+    }
+  }, [hasStoredAuth]);
 
-      if (!storedAuth) {
-        setCheckingAuth(false);
-        return;
-      }
-
-      try {
-        await requestApi<ChatsOverviewData>('/api/chats');
-        window.location.assign('/dashboard');
-      } catch (error) {
-        if (error instanceof ApiClientError && error.status === 401) {
-          clearStoredAuth();
-        } else {
-          setAuthError('Could not validate saved login.');
-        }
-
-        setCheckingAuth(false);
-      }
+  useEffect(() => {
+    if (!hasStoredAuth) {
+      return;
     }
 
-    void checkAuth();
-  }, []);
+    if (savedSessionQuery.isSuccess) {
+      window.location.assign('/dashboard');
+      return;
+    }
+
+    if (savedSessionQuery.isError) {
+      if (
+        savedSessionQuery.error instanceof ApiClientError &&
+        savedSessionQuery.error.status === 401
+      ) {
+        clearStoredAuth();
+      } else {
+        setAuthError('Could not validate saved login.');
+      }
+
+      setCheckingAuth(false);
+    }
+  }, [
+    hasStoredAuth,
+    savedSessionQuery.error,
+    savedSessionQuery.isError,
+    savedSessionQuery.isSuccess,
+  ]);
 
   useEffect(() => {
     if (checkingAuth) {
       return;
     }
-
     async function setupGoogleLogin() {
       const clientId = getGoogleClientId();
-
       if (!clientId) {
         setAuthError('Google Client ID is missing.');
         return;
       }
-
       try {
         await loadGoogleIdentityScript();
 
@@ -121,10 +130,8 @@ export default function LoginPage() {
         setAuthError('Could not load Google sign-in.');
       }
     }
-
     void setupGoogleLogin();
   }, [checkingAuth]);
-
   return (
     <main className='flex min-h-screen items-center justify-center px-4 py-10'>
       <Card className='w-full max-w-xl rounded-[32px] border border-white/70 bg-white/90 shadow-[0_30px_90px_-50px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/75 dark:shadow-black/20'>
@@ -173,7 +180,7 @@ export default function LoginPage() {
           ) : null}
 
           {authError ? (
-            <Alert variant='destructive' className='border-red-500/20 bg-red-500/5'>
+            <Alert variant='destructive' className='border-red-500/20 bg-red-500/5 text-center'>
               <AlertDescription>{authError}</AlertDescription>
             </Alert>
           ) : null}

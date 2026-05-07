@@ -6,7 +6,10 @@ import { useRouter } from 'next/navigation';
 import ChatComposer from '@/components/chat-page/ChatComposer';
 import ChatHeader from '@/components/chat-page/ChatHeader';
 import ChatMessagesPane from '@/components/chat-page/ChatMessagesPane';
-import { ApiClientError, requestApi } from '@/lib/api-client';
+import { useSheetDataStatus } from '@/components/sheet-editor/sheet-editor-queries';
+import { ApiClientError } from '@/lib/api-client';
+import { useSendChatMessageMutation } from '@/lib/api-hooks';
+import { clearStoredAuth } from '@/lib/auth-client';
 import {
   CHAT_RENAMED_EVENT,
   DATA_SOURCE_UPLOADED_EVENT,
@@ -14,7 +17,6 @@ import {
 import type {
   ChatPageData,
   ChatMessage,
-  SendChatMessageResult,
 } from '@/lib/chat-types';
 import { logger } from '@/lib/logger';
 
@@ -44,6 +46,8 @@ export default function ChatPageClient({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sheetStatusQuery = useSheetDataStatus(true);
+  const sendMessageMutation = useSendChatMessageMutation(chat._id);
 
   useEffect(() => {
     setChat(initialChat);
@@ -78,6 +82,12 @@ export default function ChatPageClient({
       window.removeEventListener(DATA_SOURCE_UPLOADED_EVENT, handleDataUpload);
   }, []);
 
+  useEffect(() => {
+    if (sheetStatusQuery.data) {
+      setHasUploadedData(sheetStatusQuery.data.hasSheetData);
+    }
+  }, [sheetStatusQuery.data]);
+
   async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -108,16 +118,7 @@ export default function ChatPageClient({
     setChatMessages((prev) => [...prev, optimisticMessage]);
 
     try {
-      const result = await requestApi<SendChatMessageResult>(
-        `/api/chats/${chat._id}/messages`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ text: userText }),
-        },
-      );
+      const result = await sendMessageMutation.mutateAsync(userText);
 
       setChatMessages((prev) => [...prev, result.message]);
 
@@ -138,6 +139,7 @@ export default function ChatPageClient({
       }
     } catch (error) {
       if (error instanceof ApiClientError && error.status === 401) {
+        clearStoredAuth();
         router.push('/login');
         return;
       }

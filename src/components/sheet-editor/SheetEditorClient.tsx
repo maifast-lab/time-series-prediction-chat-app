@@ -18,24 +18,13 @@ import { Button } from '@/components/ui/button';
 
 export default function SheetEditorClient() {
   const editor = useSheetEditor();
-
-  console.log(editor.metadata.total);
-  if(editor.metadata.total === 0){
-    return (
-      <div className='px-5 py-12 text-center sm:px-6'>
-        <div className='mx-auto flex size-14 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-200'>
-          <CalendarDays className='size-6' />
-        </div>
-        <h3 className='mt-4 text-lg font-semibold text-slate-950 dark:text-white'>
-          Please add your file first
-        </h3>
-        <p className='mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400'>
-          Upload a CSV or Excel file from the sidebar, then return here to
-          search, filter, edit, and save rows.
-        </p>
-      </div>
-    );
-  }
+  const hasActiveFilters = Boolean(
+    editor.appliedFilters.search.trim() ||
+      editor.appliedFilters.year.trim() ||
+      editor.appliedFilters.month.trim() ||
+      editor.appliedFilters.startDate ||
+      editor.appliedFilters.endDate,
+  );
 
   return (
     <div className='space-y-5'>
@@ -148,11 +137,14 @@ export default function SheetEditorClient() {
               <CalendarDays className='size-6' />
             </div>
             <h3 className='mt-4 text-lg font-semibold text-slate-950 dark:text-white'>
-              Please add your file first
+              {hasActiveFilters
+                ? 'No rows match these filters'
+                : 'Please add your file first'}
             </h3>
             <p className='mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400'>
-              Upload a CSV or Excel file from the sidebar, then return here to
-              search, filter, edit, and save rows.
+              {hasActiveFilters
+                ? 'Clear or change the filters to see more sheet rows.'
+                : 'Upload a CSV or Excel file from the sidebar, then return here to search, filter, edit, and save rows.'}
             </p>
           </div>
         ) : null}

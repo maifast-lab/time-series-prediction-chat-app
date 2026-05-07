@@ -1,14 +1,14 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import {
-  buildDataSourcesPath,
-  createSheetData,
-  updateSheetData,
-} from '@/components/sheet-editor/sheet-editor-api';
+  useCreateSheetDataMutation,
+  useDataSourcesQuery,
+  useUpdateSheetDataMutation,
+} from '@/components/sheet-editor/sheet-editor-queries';
 import {
   DEFAULT_ENTRY_COLUMNS,
   DEFAULT_FILTERS,
@@ -22,17 +22,16 @@ import type { FilterState } from '@/components/sheet-editor/sheet-editor-types';
 import {
   createChangedRowPayload,
   createDrafts,
-  formatCellValue,
   getColumns,
   getRowId,
   getRowKey,
-  normalizeDataSourceRows,
-  normalizeDataSourcesMetadata,
   type DataSourceRecord,
   type RowDraft,
 } from '@/components/sheet-editor/sheet-editor-utils';
-import { ApiClientError, requestApi } from '@/lib/api-client';
+import { ApiClientError } from '@/lib/api-client';
 import { clearStoredAuth } from '@/lib/auth-client';
+
+const EMPTY_ROWS: DataSourceRecord[] = [];
 
 function createEmptyDraft(columns: string[]) {
   return columns.reduce<RowDraft>((draft, column) => {
@@ -54,26 +53,29 @@ function buildCreatePayload(draft: RowDraft) {
   );
 }
 
-function isRecord(value: unknown): value is DataSourceRecord {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
 export function useSheetEditor() {
   const router = useRouter();
-  const requestIdRef = useRef(0);
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] =
     useState<FilterState>(DEFAULT_FILTERS);
-  const [rows, setRows] = useState<DataSourceRecord[]>([]);
   const [draftRows, setDraftRows] = useState<Record<string, RowDraft>>({});
-  const [metadata, setMetadata] = useState(EMPTY_METADATA);
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [newRowDraft, setNewRowDraft] = useState<RowDraft>({});
   const [savingRowKey, setSavingRowKey] = useState<string | null>(null);
-  const [isCreatingRow, setIsCreatingRow] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState('');
   const [filterError, setFilterError] = useState('');
+  const dataSourcesQuery = useDataSourcesQuery(appliedFilters, !filterError);
+  const createSheetDataMutation = useCreateSheetDataMutation();
+  const updateSheetDataMutation = useUpdateSheetDataMutation();
+  const rows = dataSourcesQuery.data?.rows ?? EMPTY_ROWS;
+  const metadata = dataSourcesQuery.data?.metadata ?? EMPTY_METADATA;
+  const isLoading =
+    !filterError && (dataSourcesQuery.isLoading || dataSourcesQuery.isFetching);
+  const errorMessage =
+    dataSourcesQuery.error instanceof Error
+      ? dataSourcesQuery.error.message
+      : dataSourcesQuery.error
+        ? 'Could not load spreadsheet data.'
+        : '';
 
   const columns = useMemo(() => getColumns(rows), [rows]);
   const entryColumns = useMemo(() => {
@@ -93,67 +95,38 @@ export function useSheetEditor() {
     ([key, value]) => key.toLowerCase() !== 'date' && value.trim(),
   );
 
-  const loadDataSources = useCallback(async (nextFilters: FilterState) => {
-    const requestId = requestIdRef.current + 1;
-    requestIdRef.current = requestId;
-    setIsLoading(true);
-    setErrorMessage('');
-
-    try {
-      const payload = await requestApi<unknown>(buildDataSourcesPath(nextFilters));
-
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
-
-      const nextRows = normalizeDataSourceRows(payload);
-      const nextColumns = getColumns(nextRows);
-
-      setRows(nextRows);
-      setDraftRows(createDrafts(nextRows, nextColumns));
-      setMetadata(normalizeDataSourcesMetadata(payload));
-      setAppliedFilters(nextFilters);
-    } catch (error) {
-      if (error instanceof ApiClientError && error.status === 401) {
-        clearStoredAuth();
-        router.push('/login');
-        return;
-      }
-
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
-
-      setRows([]);
-      setDraftRows({});
-      setMetadata(EMPTY_METADATA);
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : 'Could not load spreadsheet data.',
-      );
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setIsLoading(false);
-      }
-    }
-  }, [router]);
-
   useEffect(() => {
     const validationError = validateFilters(filters);
     setFilterError(validationError);
 
     if (validationError) {
-      setIsLoading(false);
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      void loadDataSources(filters);
+      setAppliedFilters(filters);
     }, 350);
 
     return () => window.clearTimeout(timeoutId);
-  }, [filters, loadDataSources]);
+  }, [filters]);
+
+  useEffect(() => {
+    if (!dataSourcesQuery.data) {
+      return;
+    }
+
+    const nextRows = dataSourcesQuery.data.rows;
+    setDraftRows(createDrafts(nextRows, getColumns(nextRows)));
+  }, [dataSourcesQuery.data]);
+
+  useEffect(() => {
+    const error = dataSourcesQuery.error;
+
+    if (error instanceof ApiClientError && error.status === 401) {
+      clearStoredAuth();
+      router.push('/login');
+    }
+  }, [dataSourcesQuery.error, router]);
 
   function updateFilter<K extends keyof FilterState>(
     key: K,
@@ -171,7 +144,7 @@ export function useSheetEditor() {
   }
 
   function refreshRows() {
-    void loadDataSources(appliedFilters);
+    void dataSourcesQuery.refetch();
   }
 
   function setPage(page: number) {
@@ -223,9 +196,9 @@ export function useSheetEditor() {
     setSavingRowKey(rowKey);
 
     try {
-      await updateSheetData(rowId, payload);
+      await updateSheetDataMutation.mutateAsync({ id: rowId, payload });
       toast.success('Row updated.');
-      await loadDataSources(appliedFilters);
+      await dataSourcesQuery.refetch();
     } catch (error) {
       if (handleUnauthorizedSave(error)) {
         return;
@@ -259,32 +232,13 @@ export function useSheetEditor() {
 
   async function saveNewRow() {
     const payload = buildCreatePayload(newRowDraft);
-    setIsCreatingRow(true);
 
     try {
-      const response = await createSheetData(payload);
-      const persistedRow =
-        isRecord(response) && Object.keys(response).length > 0
-          ? response
-          : {
-              __rowKey: `new-${Date.now()}`,
-              ...payload,
-            };
-
-      setRows((currentRows) => [...currentRows, persistedRow]);
-      setDraftRows((currentDrafts) => ({
-        ...currentDrafts,
-        [getRowKey(persistedRow, rows.length)]: Object.fromEntries(
-          Object.entries(persistedRow).map(([key, value]) => [
-            key,
-            formatCellValue(value),
-          ]),
-        ),
-      }));
+      await createSheetDataMutation.mutateAsync(payload);
       setIsAddingRow(false);
       setNewRowDraft({});
       toast.success('Entry created.');
-      await loadDataSources(appliedFilters);
+      await dataSourcesQuery.refetch();
     } catch (error) {
       if (handleUnauthorizedSave(error)) {
         return;
@@ -293,8 +247,6 @@ export function useSheetEditor() {
       toast.error('Entry creation failed.', {
         description: error instanceof Error ? error.message : 'Please try again.',
       });
-    } finally {
-      setIsCreatingRow(false);
     }
   }
 
@@ -309,7 +261,7 @@ export function useSheetEditor() {
     newRowDraft,
     savingRowKey,
     isAddingRow,
-    isCreatingRow,
+    isCreatingRow: createSheetDataMutation.isPending,
     isLoading,
     errorMessage,
     filterError,

@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
   ArrowRight,
@@ -9,6 +8,8 @@ import {
 
 import { AppPanel, PageBody, PageContainer, SectionTag } from '@/components/app/AppPage';
 import CreateChatButton from '@/components/app/CreateChatButton';
+import GuardedChatLink from '@/components/app/GuardedChatLink';
+import GuardedSheetEditorLink from '@/components/app/GuardedSheetEditorLink';
 import LogoutButton from '@/components/app/LogoutButton';
 import MainLayout from '@/components/main-layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
@@ -37,9 +38,7 @@ async function loadDashboardData() {
 
 export default async function DashboardPage() {
   const { authState, chatsOverview } = await loadDashboardData();
-  const latestChatHref = chatsOverview.latestChatId
-    ? `/c/${chatsOverview.latestChatId}`
-    : null;
+  const latestChatId = chatsOverview.latestChatId;
 
   return (
     <MainLayout initialChats={chatsOverview.chats}>
@@ -100,12 +99,12 @@ export default async function DashboardPage() {
                       </p>
                     </div>
 
-                    {latestChatHref ? (
+                    {latestChatId ? (
                       <Button asChild variant='outline' className='rounded-full'>
-                        <Link href={latestChatHref}>
+                        <GuardedChatLink chatId={latestChatId}>
                           Open latest
                           <ArrowRight className='size-4' />
-                        </Link>
+                        </GuardedChatLink>
                       </Button>
                     ) : (
                       <Badge
@@ -119,9 +118,9 @@ export default async function DashboardPage() {
 
                   <div className='mt-5 space-y-3'>
                     {chatsOverview.chats.slice(0, 4).map((chat) => (
-                      <Link
+                      <GuardedChatLink
                         key={chat._id}
-                        href={`/c/${chat._id}`}
+                        chatId={chat._id}
                         className='flex items-center justify-between rounded-2xl border border-slate-200/70 bg-white/90 px-4 py-3 text-sm text-slate-700 transition hover:border-blue-400 hover:bg-blue-50/80 hover:text-slate-950 dark:border-white/10 dark:bg-slate-950/70 dark:text-slate-200 dark:hover:border-blue-400 dark:hover:bg-blue-400/10 dark:hover:text-white'
                       >
                         <div className='min-w-0'>
@@ -133,7 +132,7 @@ export default async function DashboardPage() {
                           </div>
                         </div>
                         <ArrowRight className='size-4 flex-shrink-0' />
-                      </Link>
+                      </GuardedChatLink>
                     ))}
                   </div>
                 </div>
@@ -159,10 +158,10 @@ export default async function DashboardPage() {
 
                 <div className='mt-6 space-y-4'>
                   <Button asChild variant='secondary' className='w-full rounded-2xl'>
-                    <Link href='/edit/sheet'>
+                    <GuardedSheetEditorLink>
                       Open sheet editor
                       <ArrowRight className='size-4' />
-                    </Link>
+                    </GuardedSheetEditorLink>
                   </Button>
 
                   <div className='rounded-[24px] border border-dashed border-slate-300 p-5 text-sm leading-7 text-slate-600 dark:border-white/10 dark:text-slate-300'>

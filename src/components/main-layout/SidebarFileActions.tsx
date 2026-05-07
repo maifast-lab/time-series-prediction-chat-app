@@ -27,6 +27,8 @@ interface SidebarFileActionsProps {
   isSuggestionPage: boolean;
   uploadStep: UploadStep;
   progressMessage: string;
+  hasSheetData: boolean;
+  isCheckingSheetData: boolean;
 }
 
 export default function SidebarFileActions({
@@ -37,6 +39,8 @@ export default function SidebarFileActions({
   isSuggestionPage,
   uploadStep,
   progressMessage,
+  hasSheetData,
+  isCheckingSheetData,
 }: SidebarFileActionsProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -129,15 +133,18 @@ export default function SidebarFileActions({
 
               <button
                 type='button'
+                disabled={!hasSheetData || isCheckingSheetData}
                 onClick={() => {
                   setIsMenuOpen(false);
                   onOpenSheetEditor();
                 }}
-                className='w-full px-3 py-3 text-left text-xs text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5'
+                className='w-full px-3 py-3 text-left text-xs text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent dark:text-slate-200 dark:hover:bg-white/5 dark:disabled:text-slate-600 dark:disabled:hover:bg-transparent'
               >
                 <span className='flex items-center gap-2'>
                   <FileSpreadsheet className='h-3.5 w-3.5' />
-                  <span>Edit Current File</span>
+                  <span>
+                    {hasSheetData ? 'Edit Current File' : 'Upload File First'}
+                  </span>
                 </span>
               </button>
             </div>

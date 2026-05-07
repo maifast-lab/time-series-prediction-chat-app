@@ -1,13 +1,25 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+
 import MainLayoutSidebar from '@/components/main-layout/MainLayoutSidebar';
 import SidebarToggleButton from '@/components/main-layout/SidebarToggleButton';
 import type { UploadStep } from '@/components/main-layout/types';
+import {
+  useSheetDataStatus,
+  useUploadDataSourceMutation,
+} from '@/components/sheet-editor/sheet-editor-queries';
 import { API_BASE_URL } from '@/lib/api-base-url';
-import { ApiClientError, requestApi } from '@/lib/api-client';
+import { ApiClientError } from '@/lib/api-client';
+import {
+  apiQueryKeys,
+  useChatsOverviewQuery,
+  useCreateChatMutation,
+  useDeleteChatMutation,
+} from '@/lib/api-hooks';
 import {
   CHAT_RENAMED_EVENT,
   DATA_SOURCE_UPLOADED_EVENT,
@@ -20,11 +32,7 @@ import {
   signOut,
   type StoredAuthState,
 } from '@/lib/auth-client';
-import type { ChatSummary } from '@/lib/chat-types';
-import {
-  cleanUploadedData,
-  createDataSourceRequest,
-} from '@/lib/data-source-client';
+import type { ChatsOverviewData, ChatSummary } from '@/lib/chat-types';
 import { logger } from '@/lib/logger';
 
 interface MainLayoutClientProps {
@@ -48,24 +56,30 @@ export default function MainLayoutClient({
   children,
   initialChats,
 }: MainLayoutClientProps) {
-  const [chats, setChats] = useState(initialChats);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [uploadStep, setUploadStep] = useState<UploadStep>('idle');
   const [progressMessage, setProgressMessage] = useState('');
   const [authState, setAuthState] = useState<StoredAuthState | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [isCreatingChat, startCreateTransition] = useTransition();
   const router = useRouter();
   const params = useParams();
   const pathname = usePathname();
+  const queryClient = useQueryClient();
+  const chatsQuery = useChatsOverviewQuery({ initialChats });
+  const sheetStatusQuery = useSheetDataStatus(Boolean(authState?.user?.id));
+  const createChatMutation = useCreateChatMutation();
+  const deleteChatMutation = useDeleteChatMutation();
+  const uploadDataSourceMutation = useUploadDataSourceMutation();
   const activeChatId = getActiveChatId(params);
   const isSuggestionPage = pathname === '/share-suggestion';
   const apiHostLabel = API_BASE_URL.replace(/^https?:\/\//, '');
-
-  useEffect(() => {
-    setChats(initialChats);
-  }, [initialChats]);
+  const chats = chatsQuery.data?.chats ?? initialChats;
+  const hasSheetData = Boolean(sheetStatusQuery.data?.hasSheetData);
+  const isCheckingSheetData =
+    Boolean(authState?.user?.id) &&
+    !sheetStatusQuery.data &&
+    sheetStatusQuery.isLoading;
 
   useEffect(() => {
     function handleChatRenamed(event: Event) {
@@ -75,19 +89,23 @@ export default function MainLayoutClient({
         return;
       }
 
-      setChats((prev) =>
-        prev.map((chat) =>
-          chat._id === detail.chatId
-            ? { ...chat, company: detail.company }
-            : chat,
-        ),
+      queryClient.setQueryData<ChatsOverviewData>(
+        apiQueryKeys.chatsOverview,
+        (current) => ({
+          chats: (current?.chats ?? initialChats).map((chat) =>
+            chat._id === detail.chatId
+              ? { ...chat, company: detail.company }
+              : chat,
+          ),
+          latestChatId: current?.latestChatId ?? initialChats[0]?._id ?? null,
+        }),
       );
     }
 
     window.addEventListener(CHAT_RENAMED_EVENT, handleChatRenamed);
     return () =>
       window.removeEventListener(CHAT_RENAMED_EVENT, handleChatRenamed);
-  }, []);
+  }, [initialChats, queryClient]);
 
   useEffect(() => {
     function syncAuthState() {
@@ -112,6 +130,25 @@ export default function MainLayoutClient({
       window.removeEventListener(AUTH_STATE_CHANGED_EVENT, syncAuthState);
     };
   }, []);
+
+  useEffect(() => {
+    const error = sheetStatusQuery.error;
+
+    if (!error) {
+      return;
+    }
+
+    if (error instanceof ApiClientError && error.status === 401) {
+      clearStoredAuth();
+      setAuthState(null);
+      router.push('/login');
+      return;
+    }
+
+    logger.warn('Sheet data status check failed', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }, [router, sheetStatusQuery.error]);
 
   function closeSidebarOnMobile() {
     if (window.innerWidth < 768) {
@@ -142,11 +179,19 @@ export default function MainLayoutClient({
   }
 
   function handleOpenChat(chatId: string) {
+    if (!ensureSheetDataIsReady('Upload a file before opening chats.')) {
+      return;
+    }
+
     router.push(`/c/${chatId}`);
     closeSidebarOnMobile();
   }
 
   function handleOpenSheetEditor() {
+    if (!ensureSheetDataIsReady('Upload a file before opening the sheet editor.')) {
+      return;
+    }
+
     router.push('/edit/sheet');
     closeSidebarOnMobile();
   }
@@ -162,27 +207,52 @@ export default function MainLayoutClient({
     });
   }
 
-  function handleCreateChat() {
-    startCreateTransition(async () => {
-      try {
-        const chat = await requestApi<ChatSummary>('/api/chats', {
-          method: 'POST',
-        });
-        router.push(`/c/${chat._id}`);
-        closeSidebarOnMobile();
-      } catch (error) {
-        if (redirectToLoginIfUnauthorized(error)) {
-          return;
-        }
+  function ensureSheetDataIsReady(description: string) {
+    if (!authState?.user?.id) {
+      toast.error('Sign in required', {
+        description: 'Please sign in before using chat or sheet tools.',
+      });
+      return false;
+    }
 
-        if (error instanceof ApiClientError) {
-          logHandledApiFailure('New chat creation failed', error);
-          return;
-        }
+    if (!sheetStatusQuery.data && (sheetStatusQuery.isLoading || sheetStatusQuery.isFetching)) {
+      toast.info('Checking sheet data...', {
+        description: 'Please wait while we confirm your uploaded data.',
+      });
+      return false;
+    }
 
-        logger.error('New chat creation failed', error);
+    if (!hasSheetData) {
+      toast.error('Upload sheet data first', {
+        description,
+      });
+      return false;
+    }
+
+    return true;
+  }
+
+  async function handleCreateChat() {
+    if (!ensureSheetDataIsReady('Upload CSV or Excel data before starting chat.')) {
+      return;
+    }
+
+    try {
+      const chat = await createChatMutation.mutateAsync();
+      router.push(`/c/${chat._id}`);
+      closeSidebarOnMobile();
+    } catch (error) {
+      if (redirectToLoginIfUnauthorized(error)) {
+        return;
       }
-    });
+
+      if (error instanceof ApiClientError) {
+        logHandledApiFailure('New chat creation failed', error);
+        return;
+      }
+
+      logger.error('New chat creation failed', error);
+    }
   }
 
   async function handleSignOut() {
@@ -204,9 +274,7 @@ export default function MainLayoutClient({
     }
 
     try {
-      await requestApi<null>(`/api/chats/${chatId}`, {
-        method: 'DELETE',
-      });
+      await deleteChatMutation.mutateAsync(chatId);
     } catch (error) {
       if (redirectToLoginIfUnauthorized(error)) {
         return;
@@ -220,8 +288,6 @@ export default function MainLayoutClient({
       logger.error('Delete failed', error);
       return;
     }
-
-    setChats((prev) => prev.filter((chat) => chat._id !== chatId));
 
     if (activeChatId === chatId) {
       router.push('/');
@@ -252,22 +318,16 @@ export default function MainLayoutClient({
     setUploadStep('analyzing');
     setProgressMessage('AI is analyzing format...');
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('user_id', authState.user.id);
-
     try {
-      const cleanedData = await cleanUploadedData(formData);
-      setUploadStep('processing');
-      setProgressMessage('Data cleaned successfully. Finalizing upload...');
-
-      const dataSourceRequest = createDataSourceRequest(cleanedData);
-
-      await requestApi<unknown>('/api/data-sources', {
-        method: 'POST',
-        headers: dataSourceRequest.headers,
-        body: dataSourceRequest.body,
+      await uploadDataSourceMutation.mutateAsync({
+        file,
+        userId: authState.user.id,
+        onCleaned: () => {
+          setUploadStep('processing');
+          setProgressMessage('Data cleaned successfully. Finalizing upload...');
+        },
       });
+
       const successMessage = `${file.name} was cleaned successfully.`;
 
       toast.success('Upload complete', {
@@ -281,6 +341,10 @@ export default function MainLayoutClient({
       router.refresh();
       window.dispatchEvent(new Event(DATA_SOURCE_UPLOADED_EVENT));
     } catch (error) {
+      if (redirectToLoginIfUnauthorized(error)) {
+        return;
+      }
+
       const errorMessage =
         error instanceof Error ? error.message : 'Data conversion failed.';
 
@@ -311,11 +375,13 @@ export default function MainLayoutClient({
 
       <MainLayoutSidebar
         isSidebarOpen={isSidebarOpen}
-        isCreatingChat={isCreatingChat}
+        isCreatingChat={createChatMutation.isPending}
         chats={chats}
         activeChatId={activeChatId}
         uploadStep={uploadStep}
         progressMessage={progressMessage}
+        hasSheetData={hasSheetData}
+        isCheckingSheetData={isCheckingSheetData}
         authState={authState}
         isAuthLoading={isAuthLoading}
         isSigningOut={isSigningOut}

@@ -14,14 +14,11 @@ export function normalizePatternMessageForDisplay(content: string) {
   if (!headerMatch) {
     return content;
   }
-
   const header = headerMatch[0].replace(/\s*:\s*$/, ' :');
   const remainder = trimmed.slice(headerMatch[0].length).trim();
-
   if (!remainder) {
     return header;
   }
-
   const entryMatches = remainder.match(
     /(?:\d{1,2}(?:st|nd|rd|th)\s+[A-Za-z]+(?:\s+\d{4})?|Row\s+\d+)\s*-\s*-?\d+(?:\.\d+)?/g,
   );

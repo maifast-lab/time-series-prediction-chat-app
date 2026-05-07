@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Lightbulb,
@@ -14,7 +14,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { clearStoredAuth } from '@/lib/auth-client';
-import { ApiClientError, requestApi } from '@/lib/api-client';
+import { ApiClientError } from '@/lib/api-client';
+import { useSubmitSuggestionMutation } from '@/lib/api-hooks';
 import { logger } from '@/lib/logger';
 
 interface SuggestionPayload {
@@ -29,7 +30,8 @@ export default function SuggestionPageClient() {
   const router = useRouter();
   const [formValues, setFormValues] =
     useState<SuggestionPayload>(INITIAL_SUGGESTION);
-  const [isSubmitting, startSubmitTransition] = useTransition();
+  const suggestionMutation = useSubmitSuggestionMutation();
+  const isSubmitting = suggestionMutation.isPending;
 
   function updateField(field: keyof SuggestionPayload, value: string) {
     setFormValues((prev) => ({
@@ -53,21 +55,15 @@ export default function SuggestionPageClient() {
       return;
     }
 
-    startSubmitTransition(async () => {
-      try {
-        await requestApi<unknown>('/api/suggestion', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-
+    void suggestionMutation
+      .mutateAsync(payload)
+      .then(() => {
         setFormValues(payload);
         toast.success('Suggestion shared.', {
           description: 'Your feedback was sent to the suggestion endpoint.',
         });
-      } catch (error) {
+      })
+      .catch((error) => {
         if (error instanceof ApiClientError && error.status === 401) {
           clearStoredAuth();
           router.push('/login');
@@ -87,8 +83,7 @@ export default function SuggestionPageClient() {
           description:
             error instanceof Error ? error.message : 'Please try again.',
         });
-      }
-    });
+      });
   }
 
   return (

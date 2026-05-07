@@ -20,6 +20,8 @@ interface MainLayoutSidebarProps {
   isSuggestionPage: boolean;
   uploadStep: UploadStep;
   progressMessage: string;
+  hasSheetData: boolean;
+  isCheckingSheetData: boolean;
   authState: StoredAuthState | null;
   isAuthLoading: boolean;
   isSigningOut: boolean;
@@ -44,6 +46,8 @@ export default function MainLayoutSidebar({
   isSuggestionPage,
   uploadStep,
   progressMessage,
+  hasSheetData,
+  isCheckingSheetData,
   authState,
   isAuthLoading,
   isSigningOut,
@@ -82,6 +86,8 @@ export default function MainLayoutSidebar({
               <SidebarBrand />
               <SidebarNewChatButton
                 isCreatingChat={isCreatingChat}
+                hasSheetData={hasSheetData}
+                isCheckingSheetData={isCheckingSheetData}
                 onCreateChat={onCreateChat}
               />
             </div>
@@ -101,6 +107,8 @@ export default function MainLayoutSidebar({
               isSuggestionPage={isSuggestionPage}
               uploadStep={uploadStep}
               progressMessage={progressMessage}
+              hasSheetData={hasSheetData}
+              isCheckingSheetData={isCheckingSheetData}
             />
 
             <SidebarAuthPanel
