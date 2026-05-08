@@ -8,6 +8,7 @@ interface CleanDataResponse {
   data?: unknown;
   message?: string;
   error?: string;
+  detail?: string;
 }
 
 interface DataSourceRequest {
@@ -57,13 +58,12 @@ export async function cleanUploadedData(formData: FormData) {
     method: 'POST',
     body: formData,
   });
-
   const result = (await response.json().catch(() => null)) as
     | CleanDataResponse
     | null;
 
   if (!response.ok) {
-    const message =
+    const message = result?.detail ||
       result?.error ||
       result?.message ||
       response.statusText ||
