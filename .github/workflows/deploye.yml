@@ -1,0 +1,33 @@
+name: Deploy Maifast 
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+            export PATH="/root/.nvm/versions/node/v24.15.0/bin:/usr/local/bin:/usr/bin:$PATH"
+            git config --global --add safe.directory /home/maifast/htdocs/www.maifast.com
+            cd /home/maifast/htdocs/www.maifast.com
+            git fetch origin
+            git reset --hard origin/main
+            npm install
+            npm run build
+            pm2 restart maifast || pm2 restart 1
+            pm2 save
+
+
+
