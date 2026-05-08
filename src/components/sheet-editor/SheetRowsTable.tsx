@@ -3,6 +3,7 @@
 import { Loader2, Save } from 'lucide-react';
 
 import CellEditor from '@/components/sheet-editor/CellEditor';
+import { isDateColumn } from '@/components/sheet-editor/sheet-editor-date';
 import {
   getRowKey,
   isRowDirty,
@@ -29,6 +30,12 @@ export default function SheetRowsTable({
   onDraftChange,
   onSaveRow,
 }: SheetRowsTableProps) {
+  const normalizeFieldId = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-_:.]/g, '-');
+
   return (
     <>
       <div className='hidden overflow-x-auto lg:block'>
@@ -67,6 +74,8 @@ export default function SheetRowsTable({
                     <td key={column} className='px-4 py-3'>
                       <CellEditor
                         column={column}
+                        id={`cell-${normalizeFieldId(rowKey)}-${normalizeFieldId(column)}-desktop`}
+                        ariaLabel={column}
                         value={draft[column] ?? ''}
                         onChange={(value) =>
                           onDraftChange(rowKey, column, value)
@@ -118,16 +127,29 @@ export default function SheetRowsTable({
               <div className='space-y-3'>
                 {columns.map((column) => (
                   <div key={column} className='space-y-1.5'>
-                    <Label className='text-xs text-slate-500 dark:text-slate-400'>
-                      {column}
-                    </Label>
-                    <CellEditor
-                      column={column}
-                      value={draft[column] ?? ''}
-                      onChange={(value) =>
-                        onDraftChange(rowKey, column, value)
-                      }
-                    />
+                    {isDateColumn(column) ? (
+                      <p className='text-xs text-slate-500 dark:text-slate-400'>
+                        {column}
+                      </p>
+                    ) : (
+                      <>
+                        <Label
+                          htmlFor={`cell-${normalizeFieldId(rowKey)}-${normalizeFieldId(column)}-mobile`}
+                          className='text-xs text-slate-500 dark:text-slate-400'
+                        >
+                          {column}
+                        </Label>
+                        <CellEditor
+                          id={`cell-${normalizeFieldId(rowKey)}-${normalizeFieldId(column)}-mobile`}
+                          ariaLabel={column}
+                          column={column}
+                          value={draft[column] ?? ''}
+                          onChange={(value) =>
+                            onDraftChange(rowKey, column, value)
+                          }
+                        />
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

@@ -14,7 +14,6 @@ import {
   Sparkles,
   Upload,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 import type { UploadStep } from '@/components/main-layout/types';
 import { cn } from '@/lib/utils';
@@ -193,9 +192,8 @@ export default function SidebarFileActions({
             </div>
 
             <div className='h-1 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-white/5'>
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{
+              <div
+                style={{
                   width:
                     uploadStep === 'analyzing'
                       ? '40%'

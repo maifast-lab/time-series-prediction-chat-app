@@ -1,13 +1,10 @@
-import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 
 export default function ChatThinkingIndicator() {
   return (
-    <motion.div
+    <div
       key='thinking'
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className='mr-auto flex max-w-[80%] flex-col items-start'
+      className='mr-auto flex max-w-[80%] flex-col items-start animate-in fade-in slide-in-from-bottom-2'
     >
       <div className='mb-1 px-2 text-[10px] uppercase tracking-tighter text-slate-500 dark:text-gray-500'>
         Maifast
@@ -16,6 +13,6 @@ export default function ChatThinkingIndicator() {
         <Loader2 className='h-4 w-4 animate-spin text-blue-400' />
         <span className='animate-pulse'>Thinking...</span>
       </div>
-    </motion.div>
+    </div>
   );
 }

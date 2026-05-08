@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -13,10 +12,9 @@ interface ChatMessageItemProps {
 
 export default function ChatMessageItem({ message }: ChatMessageItemProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
+    <div
       className={cn(
+        'animate-in fade-in slide-in-from-bottom-2',
         'flex max-w-[80%] flex-col',
         message.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start',
       )}
@@ -44,6 +42,6 @@ export default function ChatMessageItem({ message }: ChatMessageItemProps) {
       <div className='mt-1 px-2 text-[10px] text-slate-400 dark:text-gray-600'>
         {format(new Date(message.createdAt), 'HH:mm')}
       </div>
-    </motion.div>
+    </div>
   );
 }

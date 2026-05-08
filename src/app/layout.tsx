@@ -35,6 +35,21 @@ const themeInitScript = `
   })();
 `;
 
+const suppressDeprecatedBeforeUnloadScript = `
+  (function () {
+    try {
+      if (!window || !window.addEventListener) return;
+      var originalAddEventListener = window.addEventListener;
+      window.addEventListener = function (type, listener, options) {
+        if (type === 'beforeunload' || type === 'unload') {
+          return;
+        }
+        return originalAddEventListener.call(this, type, listener, options);
+      };
+    } catch (error) {}
+  })();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -46,6 +61,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased transition-colors duration-300`}
       >
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {process.env.NODE_ENV === 'development' ? (
+          <script
+            dangerouslySetInnerHTML={{ __html: suppressDeprecatedBeforeUnloadScript }}
+          />
+        ) : null}
         <Providers>{children}</Providers>
       </body>
     </html>

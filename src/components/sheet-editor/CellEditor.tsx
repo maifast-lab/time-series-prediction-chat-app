@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 
 interface CellEditorProps {
   column: string;
+  id?: string;
+  ariaLabel?: string;
   value: string;
   onChange: (value: string) => void;
 }
@@ -20,6 +22,8 @@ function isLongCellValue(value: string) {
 
 export default function CellEditor({
   column,
+  id,
+  ariaLabel,
   value,
   onChange,
 }: CellEditorProps) {
@@ -35,6 +39,8 @@ export default function CellEditor({
   if (isLongCellValue(value)) {
     return (
       <Textarea
+        id={id}
+        aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className={className}
@@ -44,6 +50,8 @@ export default function CellEditor({
 
   return (
     <Input
+      id={id}
+      aria-label={ariaLabel}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       className={className}

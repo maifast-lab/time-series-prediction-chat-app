@@ -1,5 +1,3 @@
-import { AnimatePresence } from "framer-motion";
-
 import ChatMessageItem from "@/components/chat-page/ChatMessageItem";
 import ChatThinkingIndicator from "@/components/chat-page/ChatThinkingIndicator";
 import EmptyChatState from "@/components/chat-page/EmptyChatState";
@@ -23,24 +21,20 @@ export default function ChatMessagesPane({
 
   return (
     <div className='no-scrollbar flex-1 space-y-4 overflow-y-auto p-4'>
-      <AnimatePresence>
-        {messages.length === 0 && !hasUploadedData ? (
-          <EmptyChatState key='empty-state' />
-        ) : null}
+      {messages.length === 0 && !hasUploadedData ? (
+        <EmptyChatState key='empty-state' />
+      ) : null}
 
-        {messages.map((message, index) => (
-          <ChatMessageItem
-            key={message._id || `${message.role}-${message.createdAt}-${index}`}
-            message={message}
-          />
-        ))}
+      {messages.map((message, index) => (
+        <ChatMessageItem
+          key={message._id || `${message.role}-${message.createdAt}-${index}`}
+          message={message}
+        />
+      ))}
 
-        {shouldShowThinking ? (
-          <ChatThinkingIndicator key='thinking' />
-        ) : null}
+      {shouldShowThinking ? <ChatThinkingIndicator key='thinking' /> : null}
 
-        <div key='messages-end' ref={messagesEndRef} />
-      </AnimatePresence>
+      <div key='messages-end' ref={messagesEndRef} />
     </div>
   );
 }

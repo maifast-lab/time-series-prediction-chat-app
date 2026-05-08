@@ -60,17 +60,26 @@ export default function NewEntryDialog({
           <div className='grid gap-4 md:grid-cols-2'>
             {columns.map((column) => {
               const isDate = isDateColumn(column);
+              const normalizedColumn = column
+                .toLowerCase()
+                .replace(/\s+/g, '-')
+                .replace(/[^a-z0-9-_:.]/g, '-');
+              const fieldId = `new-entry-${normalizedColumn}`;
 
               return (
                 <div
                   key={column}
                   className={cn('space-y-2', isDate && 'md:col-span-2')}
                 >
-                  <Label className='text-xs text-slate-500 dark:text-slate-400'>
+                  <Label
+                    htmlFor={fieldId}
+                    className='text-xs text-slate-500 dark:text-slate-400'
+                  >
                     {column}
                   </Label>
                   {isDate ? (
                     <SheetDatePicker
+                      id={fieldId}
                       value={draft[column] ?? ''}
                       placeholder='Select date'
                       onChange={(value) => onDraftChange(column, value)}
@@ -78,6 +87,8 @@ export default function NewEntryDialog({
                   ) : (
                     <CellEditor
                       column={column}
+                      id={fieldId}
+                      ariaLabel={column}
                       value={draft[column] ?? ''}
                       onChange={(value) => onDraftChange(column, value)}
                     />
