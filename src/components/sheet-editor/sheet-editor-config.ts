@@ -19,6 +19,8 @@ export const EMPTY_METADATA: DataSourcesMetadata = {
   page: null,
   limit: null,
   totalPages: null,
+  availableYears: [],
+  availableMonths: [],
 };
 
 export const MONTH_OPTIONS = [

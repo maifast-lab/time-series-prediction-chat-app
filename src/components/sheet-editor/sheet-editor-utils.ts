@@ -6,6 +6,8 @@ export interface DataSourcesMetadata {
   page: number | null;
   limit: number | null;
   totalPages: number | null;
+  availableYears: number[];
+  availableMonths: number[];
 }
 
 const ROW_CANDIDATE_KEYS = [
@@ -48,6 +50,72 @@ function isRecord(value: unknown): value is DataSourceRecord {
 
 function isHiddenColumn(column: string) {
   return HIDDEN_COLUMN_KEYS.has(column) || column.startsWith('__');
+}
+
+function parseNumber(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim());
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function sortUniqueNumbers(values: number[], descending: boolean) {
+  const unique = Array.from(new Set(values.filter((value) => Number.isFinite(value))));
+
+  return unique.sort((left, right) => (descending ? right - left : left - right));
+}
+
+function readNumberList(value: unknown, descending: boolean) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return sortUniqueNumbers(
+    value.map((item) => parseNumber(item)).filter((item): item is number => item !== null),
+    descending,
+  );
+}
+
+function extractYearAndMonthFromRows(rows: DataSourceRecord[]) {
+  const years = new Set<number>();
+  const months = new Set<number>();
+
+  for (const row of rows) {
+    const rawDate = row.date;
+
+    if (typeof rawDate !== 'string') {
+      continue;
+    }
+
+    const match = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+      continue;
+    }
+
+    const year = parseNumber(match[1]);
+    const month = parseNumber(match[2]);
+
+    if (year !== null) {
+      years.add(year);
+    }
+
+    if (month !== null) {
+      months.add(month);
+    }
+  }
+
+  return {
+    years: sortUniqueNumbers(Array.from(years), true),
+    months: sortUniqueNumbers(Array.from(months), false),
+  };
 }
 
 function toRecord(value: unknown, index: number): DataSourceRecord {
@@ -119,17 +187,51 @@ export function normalizeDataSourcesMetadata(
       page: null,
       limit: null,
       totalPages: null,
+      availableYears: [],
+      availableMonths: [],
     };
   }
 
-  const directMetadata = {
+  let directMetadata = {
     total: readNumber(payload, TOTAL_CANDIDATE_KEYS),
     page: readNumber(payload, PAGE_CANDIDATE_KEYS),
     limit: readNumber(payload, LIMIT_CANDIDATE_KEYS),
     totalPages: readNumber(payload, TOTAL_PAGES_CANDIDATE_KEYS),
+    availableYears: readNumberList(payload['years'], true),
+    availableMonths: readNumberList(payload['months'], false),
   };
 
-  if (Object.values(directMetadata).some((value) => value !== null)) {
+  if (
+    directMetadata.availableYears.length === 0 ||
+    directMetadata.availableMonths.length === 0
+  ) {
+    const rows = extractRows(payload);
+
+    if (rows !== null) {
+      const extracted = extractYearAndMonthFromRows(rows);
+
+      directMetadata = {
+        ...directMetadata,
+        availableYears:
+          directMetadata.availableYears.length === 0
+            ? extracted.years
+            : directMetadata.availableYears,
+        availableMonths:
+          directMetadata.availableMonths.length === 0
+            ? extracted.months
+            : directMetadata.availableMonths,
+      };
+    }
+  }
+
+  const hasDirectMetadata =
+    [directMetadata.total, directMetadata.page, directMetadata.limit, directMetadata.totalPages].some(
+      (value) => value !== null,
+    ) ||
+    directMetadata.availableYears.length > 0 ||
+    directMetadata.availableMonths.length > 0;
+
+  if (hasDirectMetadata) {
     return directMetadata;
   }
 
