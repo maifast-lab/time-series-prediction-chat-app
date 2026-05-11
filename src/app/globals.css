@@ -4,47 +4,133 @@
 
 @layer base {
   :root {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
+    --background: 210 33% 98%;
+    --foreground: 222 47% 11%;
 
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
 
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
     --primary: 217 91% 60%;
     --primary-foreground: 222 47% 11%;
 
-    --secondary: 217 32% 17%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 217 32% 17%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 217 32% 17%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217 32% 17%;
-    --input: 217 32% 17%;
-    --ring: 224 76% 48%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;
+    --chart-1: 217 91% 60%;
+    --chart-2: 190 95% 39%;
+    --chart-3: 222 47% 11%;
+    --chart-4: 173 58% 39%;
+    --chart-5: 31 95% 55%;
+    --radius: 0.875rem;
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 217 91% 60%;
   }
-}
 
-@layer base {
+  .dark {
+    --background: 224 47% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 224 47% 10%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 224 47% 9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 213 94% 68%;
+    --primary-foreground: 224 47% 10%;
+
+    --secondary: 217 33% 18%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 18%;
+    --muted-foreground: 215 20% 68%;
+
+    --accent: 217 33% 18%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 52%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 18%;
+    --input: 217 33% 18%;
+    --ring: 213 94% 68%;
+    --chart-1: 213 94% 68%;
+    --chart-2: 190 100% 44%;
+    --chart-3: 210 40% 98%;
+    --chart-4: 173 80% 40%;
+    --chart-5: 31 95% 60%;
+    --sidebar: 224 47% 9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 213 94% 68%;
+    --sidebar-primary-foreground: 224 47% 10%;
+    --sidebar-accent: 217 33% 18%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 18%;
+    --sidebar-ring: 213 94% 68%;
+  }
+
+  html {
+    @apply font-sans;
+    color-scheme: light;
+    font-family: var(--font-geist-sans), sans-serif;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
   * {
-    @apply border-border;
+    @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
 
-.glass-panel {
-  @apply bg-opacity-30 backdrop-blur-lg bg-gray-900 border border-gray-700;
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 30%),
+      radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.14), transparent 35%),
+      linear-gradient(180deg, #f7fbff 0%, #eef4fb 100%);
+    background-attachment: fixed;
+    transition:
+      background-color 200ms ease,
+      color 200ms ease;
+  }
+
+  code,
+  pre {
+    font-family: var(--font-geist-mono), monospace;
+  }
+
+  html.dark body {
+    background-image:
+      radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 30%),
+      radial-gradient(circle at bottom right, rgba(8, 145, 178, 0.14), transparent 35%),
+      linear-gradient(180deg, #081120 0%, #0f172a 100%);
+  }
+
+  ::selection {
+    background: rgba(59, 130, 246, 0.24);
+  }
 }
 
 .no-scrollbar::-webkit-scrollbar {

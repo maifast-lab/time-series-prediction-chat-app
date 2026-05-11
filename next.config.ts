@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '200mb',
     },
+    optimizePackageImports: ['react-markdown', 'date-fns', 'lucide-react'],
   },
 };
 

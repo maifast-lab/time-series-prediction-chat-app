@@ -1,93 +1,62 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import MainLayout from '@/components/MainLayout';
-import { Sparkles, MessageSquare } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { redirect } from 'next/navigation';
+import { AppPanel, PageBody, PageContainer } from '@/components/app/AppPage';
+import MainLayout from '@/components/main-layout/MainLayout';
+import type { ChatsOverviewData } from '@/lib/chat-types';
+import { ServerApiError, requestServerApi } from '@/lib/server/api-client';
+import { requireServerAuthState } from '@/lib/server/auth';
 import Image from 'next/image';
-import logoImg from './logo.jpg';
+const logoImg = "/PNG.png";
+export const dynamic = 'force-dynamic';
+async function loadHomeChatsOverview() {
+  await requireServerAuthState();
 
-export default function Home() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function checkLatest() {
-      try {
-        const res = await fetch('/api/chat');
-        if (res.ok) {
-          const chats = await res.json();
-          if (chats.length > 0) {
-            router.push(`/c/${chats[0]._id}`);
-          } else {
-            setLoading(false);
-          }
-        }
-      } catch {
-        setLoading(false);
-      }
+  try {
+    return await requestServerApi<ChatsOverviewData>('/api/chats');
+  } catch (error) {
+    if (error instanceof ServerApiError && error.status === 401) {
+      redirect('/login');
     }
-    checkLatest();
-  }, [router]);
 
-  if (loading) return null;
+    throw error;
+  }
+}
+
+export default async function Home() {
+  const chatsData = await loadHomeChatsOverview();
+  const { chats, latestChatId } = chatsData;
+
+  if (latestChatId) {
+    redirect(`/c/${latestChatId}`);
+  }
 
   return (
-    <MainLayout>
-      <div className='flex-1 flex flex-col items-center justify-center p-6 text-center'>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className='max-w-2xl'
-        >
-          <div className='w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-white/10 overflow-hidden shadow-2xl shadow-blue-500/20'>
-            <Image src={logoImg} alt="Maifast Logo" className="w-full h-full object-cover" />
-          </div>
+    <MainLayout initialChats={chats}>
+      <PageBody className='grid min-h-[calc(100dvh-8rem)] place-items-center'>
+        <PageContainer className='items-center'>
+          <AppPanel className='w-full max-w-3xl overflow-hidden rounded-[34px]'>
+            <div className='relative px-6 py-12 text-center sm:px-10'>
 
-          <h1 className='text-4xl font-bold text-white mb-4 tracking-tight text-center md:text-5xl'>
-            Welcome to <span className='text-blue-500'>Maifast</span>
-          </h1>
-          <p className='text-gray-400 text-lg mb-10 leading-relaxed font-light mx-auto max-w-lg'>
-            Your premium AI companion for intelligent conversations, task
-            automation, and instant insights.
-          </p>
-
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-left'>
-            <div className='p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors'>
-              <MessageSquare className='w-6 h-6 text-blue-400 mb-3' />
-              <div className='text-white font-semibold mb-1'>
-                Natural Conversations
+              <div className='relative'>
+                <Image
+                  src={logoImg}
+                  alt='Maifast logo'
+                  width={200}
+                  height={200}
+                  className='mx-auto'
+                />
+                <h1 className='mt-6 text-4xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-5xl'>
+                  Welcome to Maifast
+                </h1>
+                <p className='mx-auto mt-4 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-300'>
+                  Manage conversations, automate tasks, and get instant AI-powered
+                  insights from one professional workspace.
+                </p>
+               
               </div>
-              <p className='text-xs text-gray-500'>
-                Chat naturally with an AI that understands context and detail.
-              </p>
             </div>
-            <div className='p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors'>
-              <Sparkles className='w-6 h-6 text-purple-400 mb-3' />
-              <div className='text-white font-semibold mb-1'>
-                Instant Insights
-              </div>
-              <p className='text-xs text-gray-500'>
-                Get answers, creative ideas, and technical help in seconds.
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={async () => {
-              const res = await fetch('/api/chat', { method: 'POST' });
-              if (res.ok) {
-                const data = await res.json();
-                router.push(`/c/${data._id}`);
-              }
-            }}
-            className='mt-12 px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold shadow-xl shadow-blue-900/20 transition-all active:scale-95'
-          >
-            Start Your First Conversation
-          </button>
-        </motion.div>
-      </div>
+          </AppPanel>
+        </PageContainer>
+      </PageBody>
     </MainLayout>
   );
 }
