@@ -22,7 +22,7 @@ import {
   loadGoogleIdentityScript,
 } from '@/lib/auth-client';
 import { ApiClientError } from '@/lib/api-client';
-import { useChatsOverviewQuery } from '@/lib/api-hooks';
+import { useChatsOverviewQuery, useCreateChatMutation } from '@/lib/api-hooks';
 export default function LoginPage() {
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const ImageLogo = "/PNG.png";
@@ -31,9 +31,29 @@ export default function LoginPage() {
   const [googleReady, setGoogleReady] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [authError, setAuthError] = useState('');
+  const createChatMutation = useCreateChatMutation();
+  const hasRedirectedToChatRef = useRef(false);
   const savedSessionQuery = useChatsOverviewQuery({
     enabled: hasStoredAuth,
   });
+
+  const createChatAndRedirect = async () => {
+    if (hasRedirectedToChatRef.current) {
+      return;
+    }
+
+    hasRedirectedToChatRef.current = true;
+    setAuthError('');
+
+    try {
+      const chat = await createChatMutation.mutateAsync();
+      window.location.assign(`/c/${chat._id}`);
+    } catch {
+      hasRedirectedToChatRef.current = false;
+      setAuthError('Could not create a new chat. Please try again.');
+      setCheckingAuth(false);
+    }
+  };
 
   useEffect(() => {
     if (!hasStoredAuth) {
@@ -47,7 +67,7 @@ export default function LoginPage() {
     }
 
     if (savedSessionQuery.isSuccess) {
-      window.location.assign('/dashboard');
+      void createChatAndRedirect();
       return;
     }
 
@@ -102,7 +122,7 @@ export default function LoginPage() {
             try {
               const profile = decodeGoogleCredential(response.credential);
               await exchangeGoogleCredential(response.credential, profile);
-              window.location.assign('/dashboard');
+              await createChatAndRedirect();
             } catch (error) {
               setAuthError(
                 error instanceof AuthClientError
