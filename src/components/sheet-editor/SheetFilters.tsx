@@ -1,9 +1,6 @@
 'use client';
 
-import { RotateCcw } from 'lucide-react';
-
 import type { FilterState } from '@/components/sheet-editor/sheet-editor-types';
-import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -26,11 +23,9 @@ interface SheetFiltersProps {
 
 export default function SheetFilters({
   filters,
-  isLoading,
   filterError,
   availableYears,
   onFilterChange,
-  onReset,
 }: SheetFiltersProps) {
   const yearOptions = availableYears.map(String);
   const hasYears = yearOptions.length > 0;
@@ -60,20 +55,6 @@ export default function SheetFilters({
               Loading years...
             </div>
           )}
-        </div>
-
-        <div className='flex gap-2'>
-          <Button
-            type='button'
-            variant='outline'
-            size='lg'
-            onClick={onReset}
-            disabled={isLoading}
-            className='h-11 rounded-xl'
-            aria-label='Reset filters'
-          >
-            <RotateCcw className='size-4' />
-          </Button>
         </div>
       </div>
 

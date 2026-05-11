@@ -33,8 +33,13 @@ export default function SheetEditorClient() {
       <AppPanel className="overflow-hidden rounded-[28px]">
         <div className="flex flex-col gap-4 border-b border-slate-200/80 px-5 py-5 dark:border-white/10 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-center gap-3">
-            <div>
-              <SheetFilters
+            <div className = "text-3xl font-bold font-semibold text-slate-950 dark:text-white">
+              Edit your sheet data here
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <SheetFilters
                 filters={editor.filters}
                 isLoading={editor.isLoading}
                 filterError={editor.filterError}
@@ -42,10 +47,6 @@ export default function SheetEditorClient() {
                 onFilterChange={editor.updateFilter}
                 onReset={editor.resetFilters}
               />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
             <NewEntryDialog
               open={editor.isAddingRow}
               columns={editor.entryColumns}
