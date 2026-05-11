@@ -5,7 +5,7 @@ import type { ChatsOverviewData } from '@/lib/chat-types';
 import { ServerApiError, requestServerApi } from '@/lib/server/api-client';
 import { requireServerAuthState } from '@/lib/server/auth';
 import Image from 'next/image';
-import logoImg from "@/app/logo.jpg"
+const logoImg = "/PNG.png";
 export const dynamic = 'force-dynamic';
 async function loadHomeChatsOverview() {
   await requireServerAuthState();

@@ -21,8 +21,8 @@ export default function ChatMessagesPane({
 
   return (
     <div className='no-scrollbar flex-1 space-y-4 overflow-y-auto p-4'>
-      {messages.length === 0 && !hasUploadedData ? (
-        <EmptyChatState key='empty-state' />
+      {messages.length === 0 ? (
+        <EmptyChatState key='empty-state' hasUploadedData={hasUploadedData} />
       ) : null}
 
       {messages.map((message, index) => (

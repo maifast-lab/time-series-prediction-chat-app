@@ -25,7 +25,7 @@ function getComposerHelperText({
   }
 
   if (!hasUploadedData) {
-    return 'Upload ke bina query send nahi hogi. Pehle sidebar se sheet upload kijiye.';
+    return 'No sheet uploaded. Ask me anything, and upload CSV/Excel anytime for spreadsheet-based answers.';
   }
 
   if (activeDataSourceName) {
@@ -53,17 +53,17 @@ export default function ChatComposer({
           type='text'
           value={inputText}
           onChange={(event) => onInputChange(event.target.value)}
-          disabled={isResponding || !hasUploadedData}
+          disabled={isResponding}
           placeholder={
             hasUploadedData
               ? 'Sheet ke hisab se apna sawal poochiye...'
-              : 'Upload Excel/CSV first to unlock chat...'
+              : 'Ask anything...'
           }
           className='w-full rounded-2xl border border-slate-200 bg-white/85 py-4 pl-6 pr-14 text-slate-900 backdrop-blur-xl transition-all placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-gray-500'
         />
         <button
           type='submit'
-          disabled={!inputText.trim() || isResponding || !hasUploadedData}
+          disabled={!inputText.trim() || isResponding}
           className='absolute right-2 top-2 rounded-xl bg-blue-600 p-3 text-white transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40'
         >
           <Sparkles className='h-4 w-4' />

@@ -179,16 +179,14 @@ export default function MainLayoutClient({
   }
 
   function handleOpenChat(chatId: string) {
-    if (!ensureSheetDataIsReady('Upload a file before opening chats.')) {
-      return;
-    }
-
     router.push(`/c/${chatId}`);
     closeSidebarOnMobile();
   }
 
   function handleOpenSheetEditor() {
-    if (!ensureSheetDataIsReady('Upload a file before opening the sheet editor.')) {
+    if (
+      !ensureSheetDataAvailable('Upload a file before opening the sheet editor.')
+    ) {
       return;
     }
 
@@ -207,7 +205,7 @@ export default function MainLayoutClient({
     });
   }
 
-  function ensureSheetDataIsReady(description: string) {
+  function ensureSheetDataAvailable(description: string) {
     if (!authState?.user?.id) {
       toast.error('Sign in required', {
         description: 'Please sign in before using chat or sheet tools.',
@@ -233,10 +231,6 @@ export default function MainLayoutClient({
   }
 
   async function handleCreateChat() {
-    if (!ensureSheetDataIsReady('Upload CSV or Excel data before starting chat.')) {
-      return;
-    }
-
     try {
       const chat = await createChatMutation.mutateAsync();
       router.push(`/c/${chat._id}`);

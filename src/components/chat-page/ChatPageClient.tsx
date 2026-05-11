@@ -97,13 +97,6 @@ export default function ChatPageClient({
       return;
     }
 
-    if (!hasUploadedData) {
-      setComposerNotice(
-        'Pehle Excel ya CSV upload kijiye. Upload ke baad hi query bhej sakte hain.',
-      );
-      return;
-    }
-
     setComposerNotice('');
     setInputText('');
     setIsResponding(true);

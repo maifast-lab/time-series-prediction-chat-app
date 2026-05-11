@@ -80,12 +80,11 @@ export default function MainLayoutSidebar({
       >
         <div className='flex flex-col gap-6 p-4 pt-16 md:pt-4'>
           <SidebarBrand />
-          <SidebarNewChatButton
-            isCreatingChat={isCreatingChat}
-            hasSheetData={hasSheetData}
-            isCheckingSheetData={isCheckingSheetData}
-            onCreateChat={onCreateChat}
-          />
+        <SidebarNewChatButton
+          isCreatingChat={isCreatingChat}
+          isCheckingSheetData={isCheckingSheetData}
+          onCreateChat={onCreateChat}
+        />
         </div>
 
         <SidebarChatList

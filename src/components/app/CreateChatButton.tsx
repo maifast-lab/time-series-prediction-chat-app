@@ -1,11 +1,8 @@
-'use client';
-
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import type { VariantProps } from 'class-variance-authority';
 
-import { useSheetDataStatus } from '@/components/sheet-editor/sheet-editor-queries';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { ApiClientError } from '@/lib/api-client';
 import { useCreateChatMutation } from '@/lib/api-hooks';
@@ -25,32 +22,9 @@ export default function CreateChatButton({
 }: CreateChatButtonProps) {
   const router = useRouter();
   const [errorMessage, setErrorMessage] = useState('');
-  const sheetStatusQuery = useSheetDataStatus(true);
   const createChatMutation = useCreateChatMutation();
-  const hasSheetData = Boolean(sheetStatusQuery.data?.hasSheetData);
   const isPending = createChatMutation.isPending;
-  const isCheckingSheetData =
-    !sheetStatusQuery.data &&
-    (sheetStatusQuery.isLoading || sheetStatusQuery.isFetching);
-  const isDisabled = isPending || isCheckingSheetData || !hasSheetData;
-  const sheetStatusErrorMessage =
-    sheetStatusQuery.error instanceof Error &&
-    !(
-      sheetStatusQuery.error instanceof ApiClientError &&
-      sheetStatusQuery.error.status === 401
-    )
-      ? sheetStatusQuery.error.message
-      : '';
-  const visibleErrorMessage = errorMessage || sheetStatusErrorMessage;
-
-  useEffect(() => {
-    const error = sheetStatusQuery.error;
-
-    if (error instanceof ApiClientError && error.status === 401) {
-      clearStoredAuth();
-      router.push('/login');
-    }
-  }, [router, sheetStatusQuery.error]);
+  const isDisabled = isPending;
 
   return (
     <div className='space-y-3'>
@@ -62,11 +36,6 @@ export default function CreateChatButton({
         className={className}
         onClick={async () => {
           setErrorMessage('');
-
-          if (!hasSheetData) {
-            setErrorMessage('Upload sheet data before starting a conversation.');
-            return;
-          }
 
           try {
             const chat = await createChatMutation.mutateAsync();
@@ -96,15 +65,9 @@ export default function CreateChatButton({
         {children}
       </Button>
 
-      {!sheetStatusQuery.isLoading && !hasSheetData ? (
-        <p className='text-sm text-slate-500 dark:text-slate-400'>
-          Upload a CSV or Excel file before starting a chat.
-        </p>
-      ) : null}
-
-      {visibleErrorMessage ? (
+      {errorMessage ? (
         <p className='text-sm text-red-600 dark:text-red-400'>
-          {visibleErrorMessage}
+          {errorMessage}
         </p>
       ) : null}
     </div>

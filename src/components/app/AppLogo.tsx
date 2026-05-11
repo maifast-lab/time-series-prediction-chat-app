@@ -1,6 +1,5 @@
 import Image from "next/image"
 
-import logoImg from "@/app/logo.jpg"
 import { cn } from "@/lib/utils"
 
 interface AppLogoProps {
@@ -31,7 +30,7 @@ export function AppLogo({
         )}
       >
         <Image
-          src={logoImg}
+          src="/PNG.png"
           alt="Maifast logo"
           fill
           className="object-cover h-full w-full"

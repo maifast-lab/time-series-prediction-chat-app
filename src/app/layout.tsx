@@ -17,6 +17,27 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Maifast',
   description: 'An AI chat and spreadsheet workspace.',
+  icons: {
+    icon: '/PNG.png',
+  },
+  openGraph: {
+    title: 'Maifast',
+    description: 'An AI chat and spreadsheet workspace.',
+    images: [
+      {
+        url: '/PNG.png',
+        width: 1024,
+        height: 1024,
+        alt: 'Maifast',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Maifast',
+    description: 'An AI chat and spreadsheet workspace.',
+    images: ['/PNG.png'],
+  },
 };
 
 const themeInitScript = `

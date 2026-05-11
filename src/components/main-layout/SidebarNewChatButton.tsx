@@ -2,23 +2,19 @@ import { Plus } from 'lucide-react';
 
 interface SidebarNewChatButtonProps {
   isCreatingChat: boolean;
-  hasSheetData: boolean;
   isCheckingSheetData: boolean;
   onCreateChat: () => void;
 }
 
 export default function SidebarNewChatButton({
   isCreatingChat,
-  hasSheetData,
   isCheckingSheetData,
   onCreateChat,
 }: SidebarNewChatButtonProps) {
-  const isDisabled = isCreatingChat || isCheckingSheetData || !hasSheetData;
+  const isDisabled = isCreatingChat || isCheckingSheetData;
   const label = isCheckingSheetData
-    ? 'Checking Sheet'
-    : hasSheetData
-      ? 'New Chat'
-      : 'Upload Sheet First';
+    ? 'Checking Session'
+    : 'New Chat';
 
   return (
     <button

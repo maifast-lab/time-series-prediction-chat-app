@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-
-import { AppLogo } from '@/components/app/AppLogo';
+import Image from 'next/image';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,7 +25,7 @@ import { ApiClientError } from '@/lib/api-client';
 import { useChatsOverviewQuery } from '@/lib/api-hooks';
 export default function LoginPage() {
   const googleButtonRef = useRef<HTMLDivElement>(null);
-
+  const ImageLogo = "/PNG.png";
   const [hasStoredAuth] = useState(() => Boolean(getStoredAuth()));
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [googleReady, setGoogleReady] = useState(false);
@@ -136,7 +135,15 @@ export default function LoginPage() {
     <main className='flex min-h-screen items-center justify-center px-4 py-10'>
       <Card className='w-full max-w-xl rounded-[32px] border border-white/70 bg-white/90 shadow-[0_30px_90px_-50px_rgba(15,23,42,0.45)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/75 dark:shadow-black/20'>
         <CardHeader className='items-center justify-center space-y-5 px-6 pt-8 text-center sm:px-8 sm:pt-10'>
-          <AppLogo size='lg' />
+<div className='relative w-full flex justify-center'>
+
+            <Image
+            src={ImageLogo} alt='Maifast Logo'  
+            width={200}
+            height={200}
+            className='mx-auto'
+          />
+</div>
           <div className='space-y-2'>
             <CardTitle className='text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-4xl'>
               Welcome back

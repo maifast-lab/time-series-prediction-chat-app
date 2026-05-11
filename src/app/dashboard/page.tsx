@@ -2,7 +2,7 @@
 import { AppPanel, PageBody, PageContainer } from "@/components/app/AppPage";
 import MainLayout from "@/components/main-layout/MainLayout";
 import Image from 'next/image';
-import logoImg from "@/app/logo.jpg"
+const logoImg = "/PNG.png";
 export default async function DashboardPage() {
   return (
     <MainLayout initialChats={[]}>
