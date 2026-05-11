@@ -35,7 +35,6 @@ export default function SheetFilters({
   const yearOptions = availableYears.map(String);
   const hasYears = yearOptions.length > 0;
   const yearValue = filters.year.trim() || (hasYears ? yearOptions[0] : '');
-
   return (
     <div className='px-5 py-5 sm:px-6'>
       <div className='grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end'>
