@@ -47,7 +47,7 @@ export default function SheetFilters({
               <SelectTrigger id='sheet-year'>
                 <SelectValue placeholder='Select year' />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent> 
                 {yearOptions.map((year) => (
                   <SelectItem key={year} value={year}>
                     {year}
