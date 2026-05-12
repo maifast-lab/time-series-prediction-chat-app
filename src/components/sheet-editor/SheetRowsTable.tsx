@@ -30,6 +30,7 @@ const MONTH_LABELS = [
   'Dec',
 ];
 const SERIES_METRICS = ['FB', 'GB', 'GL', 'DS'];
+const ALL_YEAR_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 const HIDDEN_ROW_KEYS = new Set([
   'id',
@@ -128,26 +129,7 @@ export default function SheetRowsTable({
     }
 
     if (selectedYear > 0) {
-      return availableMonths.length > 0
-        ? availableMonths
-        : (() => {
-            const fallbackMonths = new Set<number>();
-
-            for (const row of rows) {
-              const parsed = parseDateParts(row.date);
-              if (!parsed) {
-                continue;
-              }
-
-              if (Number.isFinite(selectedYear) && parsed.year !== selectedYear) {
-                continue;
-              }
-
-              fallbackMonths.add(parsed.month);
-            }
-
-            return [...fallbackMonths].sort((left, right) => left - right);
-          })();
+      return ALL_YEAR_MONTHS;
     }
 
     if (availableMonths.length > 0) {
