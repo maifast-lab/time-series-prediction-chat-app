@@ -1,4 +1,4 @@
-import { MessageSquare, Trash2 } from 'lucide-react';
+import { MessageSquare, PencilLine, Trash2 } from 'lucide-react';
 
 import type { ChatSummary } from '@/lib/chat-types';
 import { cn } from '@/lib/utils';
@@ -8,6 +8,7 @@ interface SidebarChatListProps {
   activeChatId: string | null;
   onOpenChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
+  onRenameChat: (chatId: string) => void;
 }
 
 export default function SidebarChatList({
@@ -15,6 +16,7 @@ export default function SidebarChatList({
   activeChatId,
   onOpenChat,
   onDeleteChat,
+  onRenameChat,
 }: SidebarChatListProps) {
   return (
     <div className='no-scrollbar flex-1 space-y-2 overflow-y-auto px-2 py-2'>
@@ -39,6 +41,17 @@ export default function SidebarChatList({
               {chat.company || 'New Chat'}
             </span>
           </div>
+          <button
+            type='button'
+            aria-label={`Rename ${chat.company || 'chat'}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onRenameChat(chat._id);
+            }}
+            className='rounded-md p-1.5 text-slate-500 opacity-0 transition-all hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 dark:text-gray-500 dark:hover:bg-white/10 dark:hover:text-gray-200'
+          >
+            <PencilLine className='h-3.5 w-3.5' />
+          </button>
           <button
             type='button'
             aria-label={`Delete ${chat.company || 'chat'}`}

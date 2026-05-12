@@ -35,6 +35,12 @@ export interface SendChatMessageResult {
   chatTitle: string | null;
 }
 
+export interface LatestChatLookupResponse {
+  hasChat: boolean;
+  chatId: string | null;
+  message: string;
+}
+
 export interface UploadDataSourceResult {
   message: string;
   chatId: string | null;

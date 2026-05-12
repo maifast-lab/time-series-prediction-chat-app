@@ -8,11 +8,12 @@ import ChatHeader from '@/components/chat-page/ChatHeader';
 import ChatMessagesPane from '@/components/chat-page/ChatMessagesPane';
 import { useSheetDataStatus } from '@/components/sheet-editor/sheet-editor-queries';
 import { ApiClientError } from '@/lib/api-client';
-import { useSendChatMessageMutation } from '@/lib/api-hooks';
+import { useRenameChatMutation, useSendChatMessageMutation } from '@/lib/api-hooks';
 import { clearStoredAuth } from '@/lib/auth-client';
 import {
   CHAT_RENAMED_EVENT,
   DATA_SOURCE_UPLOADED_EVENT,
+  type ChatRenamedEventDetail,
 } from '@/lib/app-events';
 import type {
   ChatPageData,
@@ -48,6 +49,7 @@ export default function ChatPageClient({
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetStatusQuery = useSheetDataStatus(true);
   const sendMessageMutation = useSendChatMessageMutation(chat._id);
+  const renameChatMutation = useRenameChatMutation(chat._id);
 
   useEffect(() => {
     setChat(initialChat);
@@ -70,6 +72,25 @@ export default function ChatPageClient({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isResponding]);
+
+  useEffect(() => {
+    function handleChatRenamed(event: Event) {
+      const detail = (event as CustomEvent<ChatRenamedEventDetail>).detail;
+
+      if (!detail || detail.chatId !== chat._id) {
+        return;
+      }
+
+      setChat((prev) => ({
+        ...prev,
+        company: detail.company,
+      }));
+    }
+
+    window.addEventListener(CHAT_RENAMED_EVENT, handleChatRenamed);
+    return () =>
+      window.removeEventListener(CHAT_RENAMED_EVENT, handleChatRenamed);
+  }, [chat._id]);
 
   useEffect(() => {
     function handleDataUpload() {
@@ -164,9 +185,40 @@ export default function ChatPageClient({
     }
   }
 
+  async function handleRenameChat(nextName: string) {
+    try {
+      const updatedChat = await renameChatMutation.mutateAsync(nextName);
+      setChat((prev) => ({
+        ...prev,
+        company: updatedChat.company,
+      }));
+
+      window.dispatchEvent(
+        new CustomEvent(CHAT_RENAMED_EVENT, {
+          detail: {
+            chatId: chat._id,
+            company: updatedChat.company,
+          },
+        }),
+      );
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 401) {
+        clearStoredAuth();
+        router.push('/login');
+        throw error;
+      }
+
+      throw error;
+    }
+  }
+
   return (
     <div className='flex h-full flex-col'>
-      <ChatHeader chat={chat} />
+      <ChatHeader
+        chat={chat}
+        onRename={handleRenameChat}
+        isRenaming={renameChatMutation.isPending}
+      />
       <ChatMessagesPane
         messages={chatMessages}
         hasUploadedData={hasUploadedData}

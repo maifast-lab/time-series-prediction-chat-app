@@ -29,6 +29,7 @@ interface MainLayoutSidebarProps {
   onCreateChat: () => void;
   onOpenChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
+  onRenameChat: (chatId: string) => void;
   onUploadFile: ChangeEventHandler<HTMLInputElement>;
   onDownloadSample: () => void;
   onOpenSheetEditor: () => void;
@@ -55,6 +56,7 @@ export default function MainLayoutSidebar({
   onCreateChat,
   onOpenChat,
   onDeleteChat,
+  onRenameChat,
   onUploadFile,
   onDownloadSample,
   onOpenSheetEditor,
@@ -92,6 +94,7 @@ export default function MainLayoutSidebar({
           activeChatId={activeChatId}
           onOpenChat={onOpenChat}
           onDeleteChat={onDeleteChat}
+          onRenameChat={onRenameChat}
         />
 
         <SidebarFileActions

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { AppPanel, PageBody, PageContainer } from '@/components/app/AppPage';
 import MainLayout from '@/components/main-layout/MainLayout';
-import type { ChatsOverviewData } from '@/lib/chat-types';
+import type { ChatsOverviewData, LatestChatLookupResponse } from '@/lib/chat-types';
 import { ServerApiError, requestServerApi } from '@/lib/server/api-client';
 import { requireServerAuthState } from '@/lib/server/auth';
 import Image from 'next/image';
@@ -11,6 +11,14 @@ async function loadHomeChatsOverview() {
   await requireServerAuthState();
 
   try {
+    const latestChat = await requestServerApi<LatestChatLookupResponse>(
+      '/api/chats/latest',
+    );
+
+    if (latestChat.hasChat && latestChat.chatId) {
+      redirect(`/c/${latestChat.chatId}`);
+    }
+
     return await requestServerApi<ChatsOverviewData>('/api/chats');
   } catch (error) {
     if (error instanceof ServerApiError && error.status === 401) {
