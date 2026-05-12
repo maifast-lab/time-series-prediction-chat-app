@@ -186,7 +186,6 @@ export default function SheetRowsTable({
     for (const column of visibleColumns) {
       metricByKey.set(column.toLowerCase(), column);
     }
-
     const orderedSeriesColumns = SERIES_METRICS.flatMap((metric) => {
       const match = metricByKey.get(metric.toLowerCase());
       return match ? [match] : [];
