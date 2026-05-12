@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import MainLayoutSidebar from '@/components/main-layout/MainLayoutSidebar';
 import SidebarToggleButton from '@/components/main-layout/SidebarToggleButton';
 import type { UploadStep } from '@/components/main-layout/types';
+import { Button } from '@/components/ui/button';
 import {
   useSheetDataStatus,
   useUploadDataSourceMutation,
@@ -19,12 +20,23 @@ import {
   useChatsOverviewQuery,
   useCreateChatMutation,
   useDeleteChatMutation,
+  useRenameChatByIdMutation,
 } from '@/lib/api-hooks';
 import {
   CHAT_RENAMED_EVENT,
   DATA_SOURCE_UPLOADED_EVENT,
   type ChatRenamedEventDetail,
 } from '@/lib/app-events';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   AUTH_STATE_CHANGED_EVENT,
   clearStoredAuth,
@@ -59,6 +71,9 @@ export default function MainLayoutClient({
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [uploadStep, setUploadStep] = useState<UploadStep>('idle');
   const [progressMessage, setProgressMessage] = useState('');
+  const [renameChatId, setRenameChatId] = useState<string | null>(null);
+  const [renameChatName, setRenameChatName] = useState('');
+  const [deleteChatId, setDeleteChatId] = useState<string | null>(null);
   const [authState, setAuthState] = useState<StoredAuthState | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -70,6 +85,7 @@ export default function MainLayoutClient({
   const sheetStatusQuery = useSheetDataStatus(Boolean(authState?.user?.id));
   const createChatMutation = useCreateChatMutation();
   const deleteChatMutation = useDeleteChatMutation();
+  const renameChatMutation = useRenameChatByIdMutation();
   const uploadDataSourceMutation = useUploadDataSourceMutation();
   const activeChatId = getActiveChatId(params);
   const isSuggestionPage = pathname === '/share-suggestion';
@@ -249,6 +265,68 @@ export default function MainLayoutClient({
     }
   }
 
+  async function handleRenameChat(chatId: string) {
+    const currentChat = chats.find((chat) => chat._id === chatId);
+    const currentName = currentChat?.company ?? '';
+    setRenameChatId(chatId);
+    setRenameChatName(currentName);
+  }
+
+  async function handleRenameConfirm() {
+    if (!renameChatId) {
+      return;
+    }
+
+    const currentChat = chats.find((chat) => chat._id === renameChatId);
+    const currentName = currentChat?.company ?? '';
+    const normalizedName = renameChatName.trim();
+
+    if (!normalizedName || normalizedName === currentName) {
+      setRenameChatId(null);
+      setRenameChatName('');
+      return;
+    }
+
+    try {
+      await renameChatMutation.mutateAsync({
+        chatId: renameChatId,
+        company: normalizedName,
+      });
+      window.dispatchEvent(
+        new CustomEvent(CHAT_RENAMED_EVENT, {
+          detail: {
+            chatId: renameChatId,
+            company: normalizedName,
+          },
+        }),
+      );
+      setRenameChatId(null);
+      setRenameChatName('');
+    } catch (error) {
+      if (redirectToLoginIfUnauthorized(error)) {
+        return;
+      }
+
+      if (error instanceof ApiClientError) {
+        logHandledApiFailure('Rename failed', error);
+        return;
+      }
+
+      logger.error('Rename failed', error);
+    }
+  }
+
+  function handleRenameCancel() {
+    setRenameChatId(null);
+    setRenameChatName('');
+  }
+
+  function handleRenameDialogOpenChange(open: boolean) {
+    if (!open) {
+      handleRenameCancel();
+    }
+  }
+
   async function handleSignOut() {
     setIsSigningOut(true);
 
@@ -262,13 +340,18 @@ export default function MainLayoutClient({
     }
   }
 
-  async function handleDeleteChat(chatId: string) {
-    if (!window.confirm('Are you sure you want to delete this chat?')) {
+  function handleDeleteChat(chatId: string) {
+    setDeleteChatId(chatId);
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteChatId) {
       return;
     }
 
     try {
-      await deleteChatMutation.mutateAsync(chatId);
+      await deleteChatMutation.mutateAsync(deleteChatId);
+      setDeleteChatId(null);
     } catch (error) {
       if (redirectToLoginIfUnauthorized(error)) {
         return;
@@ -283,13 +366,26 @@ export default function MainLayoutClient({
       return;
     }
 
-    if (activeChatId === chatId) {
+    if (activeChatId === deleteChatId) {
       router.push('/');
       return;
     }
 
     router.refresh();
   }
+
+  function handleDeleteCancel() {
+    setDeleteChatId(null);
+  }
+
+  function handleDeleteDialogOpenChange(open: boolean) {
+    if (!open) {
+      handleDeleteCancel();
+    }
+  }
+
+  const renameChat = chats.find((chat) => chat._id === renameChatId);
+  const deleteChat = chats.find((chat) => chat._id === deleteChatId);
 
   async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
     event.preventDefault();
@@ -361,6 +457,93 @@ export default function MainLayoutClient({
 
   return (
     <div className='flex h-screen w-full overflow-hidden bg-transparent font-sans text-slate-900 selection:bg-blue-500/30 dark:text-gray-100'>
+      <Dialog
+        open={Boolean(renameChatId)}
+        onOpenChange={handleRenameDialogOpenChange}
+      >
+        <DialogContent className='font-sans'>
+          <DialogHeader>
+            <DialogTitle>Rename chat</DialogTitle>
+            <DialogDescription>
+              Update the chat title to make it easier to identify later.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleRenameConfirm();
+            }}
+          >
+            <div className='px-6 pb-2'>
+              <Label htmlFor='rename-chat-title' className='mb-1 block text-sm'>
+                Chat title
+              </Label>
+              <Input
+                id='rename-chat-title'
+                value={renameChatName}
+                onChange={(event) => setRenameChatName(event.target.value)}
+                placeholder='Enter chat title'
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={handleRenameCancel}
+                disabled={renameChatMutation.isPending}
+                className='rounded-xl'
+              >
+                Cancel
+              </Button>
+              <Button
+                type='submit'
+                disabled={
+                  renameChatMutation.isPending ||
+                  !renameChatName.trim() ||
+                  renameChat?.company === renameChatName.trim()
+                }
+                className='rounded-xl'
+              >
+                Save
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(deleteChatId)} onOpenChange={handleDeleteDialogOpenChange}>
+        <DialogContent className='font-sans'>
+          <DialogHeader>
+            <DialogTitle>Delete chat</DialogTitle>
+            <DialogDescription>
+              {`This action can't be undone. You are about to delete ${
+                deleteChat?.company || 'this chat'
+              } and all its messages.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={handleDeleteCancel}
+              disabled={deleteChatMutation.isPending}
+              className='rounded-xl'
+            >
+              Cancel
+            </Button>
+            <Button
+              type='button'
+              variant='destructive'
+              onClick={handleDeleteConfirm}
+              disabled={deleteChatMutation.isPending}
+              className='rounded-xl'
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <SidebarToggleButton
         isSidebarOpen={isSidebarOpen}
         onToggle={() => setIsSidebarOpen((open) => !open)}
@@ -384,6 +567,7 @@ export default function MainLayoutClient({
         onCreateChat={handleCreateChat}
         onOpenChat={handleOpenChat}
         onDeleteChat={handleDeleteChat}
+        onRenameChat={handleRenameChat}
         onUploadFile={handleFileUpload}
         onDownloadSample={handleDownloadSample}
         onOpenSheetEditor={handleOpenSheetEditor}

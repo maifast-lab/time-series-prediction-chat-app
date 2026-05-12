@@ -22,7 +22,7 @@ import {
   loadGoogleIdentityScript,
 } from '@/lib/auth-client';
 import { ApiClientError } from '@/lib/api-client';
-import { useChatsOverviewQuery, useCreateChatMutation } from '@/lib/api-hooks';
+import { useCreateChatMutation, useLatestChatQuery } from '@/lib/api-hooks';
 export default function LoginPage() {
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const ImageLogo = "/PNG.png";
@@ -33,7 +33,7 @@ export default function LoginPage() {
   const [authError, setAuthError] = useState('');
   const createChatMutation = useCreateChatMutation();
   const hasRedirectedToChatRef = useRef(false);
-  const savedSessionQuery = useChatsOverviewQuery({
+  const latestChatQuery = useLatestChatQuery({
     enabled: hasStoredAuth,
   });
 
@@ -46,6 +46,23 @@ export default function LoginPage() {
     setAuthError('');
 
     try {
+      if (!latestChatQuery.data) {
+        const latestChatResult = await latestChatQuery.refetch();
+        if (
+          latestChatResult.data?.hasChat &&
+          latestChatResult.data.chatId
+        ) {
+          window.location.assign(`/c/${latestChatResult.data.chatId}`);
+          return;
+        }
+      } else if (
+        latestChatQuery.data.hasChat &&
+        latestChatQuery.data.chatId
+      ) {
+        window.location.assign(`/c/${latestChatQuery.data.chatId}`);
+        return;
+      }
+
       const chat = await createChatMutation.mutateAsync();
       window.location.assign(`/c/${chat._id}`);
     } catch {
@@ -66,16 +83,13 @@ export default function LoginPage() {
       return;
     }
 
-    if (savedSessionQuery.isSuccess) {
+    if (latestChatQuery.isSuccess) {
       void createChatAndRedirect();
       return;
     }
 
-    if (savedSessionQuery.isError) {
-      if (
-        savedSessionQuery.error instanceof ApiClientError &&
-        savedSessionQuery.error.status === 401
-      ) {
+    if (latestChatQuery.isError) {
+      if (latestChatQuery.error instanceof ApiClientError && latestChatQuery.error.status === 401) {
         clearStoredAuth();
       } else {
         setAuthError('Could not validate saved login.');
@@ -85,9 +99,9 @@ export default function LoginPage() {
     }
   }, [
     hasStoredAuth,
-    savedSessionQuery.error,
-    savedSessionQuery.isError,
-    savedSessionQuery.isSuccess,
+    latestChatQuery.error,
+    latestChatQuery.isError,
+    latestChatQuery.isSuccess,
   ]);
 
   useEffect(() => {

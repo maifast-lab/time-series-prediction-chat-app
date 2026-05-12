@@ -6,11 +6,13 @@ import { requestApi } from '@/lib/api-client';
 import type {
   ChatSummary,
   ChatsOverviewData,
+  LatestChatLookupResponse,
   SendChatMessageResult,
 } from '@/lib/chat-types';
 
 export const apiQueryKeys = {
   chatsOverview: ['chats-overview'] as const,
+  latestChat: ['latest-chat'] as const,
 };
 
 export function useChatsOverviewQuery({
@@ -52,6 +54,76 @@ export function useCreateChatMutation() {
             ...(current?.chats.filter((item) => item._id !== chat._id) ?? []),
           ],
         }),
+      );
+    },
+  });
+}
+
+export function useLatestChatQuery({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: apiQueryKeys.latestChat,
+    queryFn: () => requestApi<LatestChatLookupResponse>('/api/chats/latest'),
+    enabled,
+  });
+}
+
+export function useRenameChatMutation(chatId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (company: string) =>
+      requestApi<ChatSummary>(`/api/chats/${chatId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ company }),
+      }),
+    onSuccess: (updatedChat) => {
+      queryClient.setQueryData<ChatsOverviewData>(
+        apiQueryKeys.chatsOverview,
+        (current) =>
+          current
+            ? {
+                ...current,
+                chats: current.chats.map((chat) =>
+                  chat._id === updatedChat._id
+                    ? { ...chat, company: updatedChat.company }
+                    : chat,
+                ),
+              }
+            : current,
+      );
+    },
+  });
+}
+
+export function useRenameChatByIdMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: { chatId: string; company: string }) =>
+      requestApi<ChatSummary>(`/api/chats/${payload.chatId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ company: payload.company }),
+      }),
+    onSuccess: (updatedChat) => {
+      queryClient.setQueryData<ChatsOverviewData>(
+        apiQueryKeys.chatsOverview,
+        (current) =>
+          current
+            ? {
+                ...current,
+                chats: current.chats.map((chat) =>
+                  chat._id === updatedChat._id
+                    ? { ...chat, company: updatedChat.company }
+                    : chat,
+                ),
+              }
+            : current,
       );
     },
   });
