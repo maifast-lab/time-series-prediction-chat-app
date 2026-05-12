@@ -29,6 +29,7 @@ const MONTH_LABELS = [
   'Nov',
   'Dec',
 ];
+const SERIES_METRICS = ['FB', 'GB', 'GL', 'DS'];
 
 const HIDDEN_ROW_KEYS = new Set([
   'id',
@@ -160,7 +161,7 @@ export default function SheetRowsTable({
   ]);
 
   const metricColumns = useMemo(() => {
-    return columns.filter((column) => {
+    const visibleColumns = columns.filter((column) => {
       const key = column.toLowerCase();
 
       if (key === 'date') {
@@ -173,6 +174,22 @@ export default function SheetRowsTable({
 
       return true;
     });
+
+    const metricByKey = new Map<string, string>();
+    for (const column of visibleColumns) {
+      metricByKey.set(column.toLowerCase(), column);
+    }
+
+    const orderedSeriesColumns = SERIES_METRICS.flatMap((metric) => {
+      const match = metricByKey.get(metric.toLowerCase());
+      return match ? [match] : [];
+    });
+
+    const remainingColumns = visibleColumns.filter(
+      (column) => !orderedSeriesColumns.includes(column),
+    );
+
+    return [...orderedSeriesColumns, ...remainingColumns];
   }, [columns]);
 
   const pivotColumns: MonthMetricCell[] = useMemo(
@@ -255,6 +272,29 @@ export default function SheetRowsTable({
 
   const yearLabel =
     selectedYear > 0 ? `Year ${selectedYear}` : 'Year (all)';
+  const yearHeaderStyle =
+    selectedYear > 0
+      ? (() => {
+          const hue = (selectedYear * 41) % 360;
+          return {
+            backgroundColor: `hsl(${hue} 86% 90%)`,
+            color: `hsl(${hue} 75% 24%)`,
+            borderColor: `hsl(${hue} 70% 60%)`,
+          };
+        })()
+      : null;
+  const monthHeaderPalette = [
+    'bg-red-100/85 text-red-900 dark:bg-red-900/45 dark:text-red-100 dark:border-red-400/25',
+    'bg-yellow-100/80 text-yellow-900 dark:bg-yellow-900/45 dark:text-yellow-100 dark:border-yellow-400/25',
+  ];
+
+  const monthHeaderByIndex = new Map<number, string>();
+  displayedMonths.forEach((month, monthIndex) => {
+    monthHeaderByIndex.set(
+      month,
+      monthHeaderPalette[monthIndex % monthHeaderPalette.length],
+    );
+  });
 
   const isDayDirty = (day: number) => {
     for (const month of displayedMonths) {
@@ -371,28 +411,29 @@ export default function SheetRowsTable({
   return (
     <>
       {hasYearFilter ? (
-        <div className='overflow-x-auto'>
+        <div className='relative max-h-[80vh] overflow-x-auto overflow-y-auto'>
           <table className='w-max min-w-full border-collapse whitespace-nowrap text-left text-sm'>
-            <thead className='bg-slate-100/80 text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:bg-white/5 dark:text-slate-400'>
+            <thead className='sticky top-0 z-40 bg-white text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-950 dark:text-slate-400'>
               <tr>
                 <th
                   rowSpan={3}
                   scope='col'
-                  className='sticky left-0 top-0 z-30 border-b border-slate-200/80 bg-slate-100/95 px-4 py-3 font-semibold dark:border-white/10 dark:bg-slate-950'
+                  className='sticky left-0 top-0 z-30 border-b border-slate-200/80 bg-white px-4 py-3 font-semibold dark:border-white/10 dark:bg-slate-950'
                 >
                   Day
                 </th>
                 <th
                   colSpan={Math.max(pivotColumns.length, 1)}
                   scope='col'
-                  className='sticky top-0 z-20 border-b border-slate-200/80 bg-slate-100/95 px-4 py-3 text-center font-semibold dark:border-white/10'
+                  className='sticky top-0 z-20 border-b border-slate-200/80 bg-white px-4 py-3 text-center font-semibold dark:border-white/10'
+                  style={yearHeaderStyle ?? undefined}
                 >
                   {yearLabel}
                 </th>
                 <th
                   rowSpan={3}
                   scope='col'
-                  className='sticky right-0 top-0 z-30 border-b border-slate-200/80 bg-slate-100/95 px-4 py-3 text-right font-semibold dark:border-white/10 dark:bg-slate-950'
+                  className='sticky right-0 top-0 z-30 border-b border-slate-200/80 bg-white px-4 py-3 text-right font-semibold dark:border-white/10 dark:bg-slate-950'
                 >
                   Action
                 </th>
@@ -404,7 +445,7 @@ export default function SheetRowsTable({
                       key={`month-${month}`}
                       scope='col'
                       colSpan={Math.max(metricColumns.length, 1)}
-                      className='sticky top-0 z-20 border-b border-slate-200/80 bg-slate-100/90 px-4 py-2 text-center font-semibold dark:border-white/10'
+                      className={`sticky top-0 z-20 border-b border-slate-200/80 px-4 py-2 text-center font-semibold ${monthHeaderByIndex.get(month)}`}
                     >
                       {MONTH_LABELS[month] || String(month)}
                     </th>
@@ -413,7 +454,7 @@ export default function SheetRowsTable({
                   <th
                     scope='col'
                     rowSpan={2}
-                    className='sticky top-0 border-b border-slate-200/80 bg-slate-100/90 px-4 py-2 text-left font-semibold'
+                    className='sticky top-0 border-b border-slate-200/80 bg-white px-4 py-2 text-left font-semibold dark:bg-slate-950'
                   >
                     No months
                   </th>
@@ -425,7 +466,7 @@ export default function SheetRowsTable({
                     <th
                       key={`${cell.month}-${cell.metric}`}
                       scope='col'
-                      className='sticky top-0 z-10 border-b border-slate-200/80 bg-slate-100/90 px-2 py-2 text-center font-medium dark:border-white/10'
+                      className={`sticky top-0 z-10 border-b border-slate-200/80 px-2 py-2 text-center font-medium ${monthHeaderByIndex.get(cell.month)}`}
                     >
                       {cell.metric.toUpperCase()}
                     </th>
@@ -433,7 +474,7 @@ export default function SheetRowsTable({
                 ) : (
                   <th
                     scope='col'
-                    className='sticky top-0 border-b border-slate-200/80 bg-slate-100/90 px-4 py-2 font-medium dark:border-white/10'
+                    className='sticky top-0 border-b border-slate-200/80 bg-white px-4 py-2 font-medium dark:border-white/10 dark:bg-slate-950'
                   >
                     Value
                   </th>

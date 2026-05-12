@@ -7,14 +7,12 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
-
 import { AppPanel } from "@/components/app/AppPage";
 import NewEntryDialog from "@/components/sheet-editor/NewEntryDialog";
 import SheetFilters from "@/components/sheet-editor/SheetFilters";
 import SheetRowsTable from "@/components/sheet-editor/SheetRowsTable";
 import { useSheetEditor } from "@/components/sheet-editor/useSheetEditor";
 import { Button } from "@/components/ui/button";
-
 export default function SheetEditorClient() {
   const editor = useSheetEditor();
   const hasActiveFilters = Boolean(editor.appliedFilters.year.trim());
