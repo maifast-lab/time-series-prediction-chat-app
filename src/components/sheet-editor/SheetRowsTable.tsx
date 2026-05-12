@@ -58,6 +58,27 @@ interface ParsedDate {
   day: number;
 }
 
+const parseDateParts = (value: unknown): ParsedDate | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  const day = Number.parseInt(match[3], 10);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+
+  return { year, month, day };
+};
+
 interface SourceRow {
   row: DataSourceRecord;
   rowIndex: number;
@@ -94,28 +115,6 @@ export default function SheetRowsTable({
       .toLowerCase()
       .replace(/\s+/g, '-')
       .replace(/[^a-z0-9-_:.]/g, '-');
-
-  const parseDateParts = (value: unknown): ParsedDate | null => {
-    if (typeof value !== 'string') {
-      return null;
-    }
-
-    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) {
-      return null;
-    }
-
-    const year = Number.parseInt(match[1], 10);
-    const month = Number.parseInt(match[2], 10);
-    const day = Number.parseInt(match[3], 10);
-
-    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-      return null;
-    }
-
-    return { year, month, day };
-  };
-
   const selectedYear = Number.parseInt(appliedFilters.year, 10);
   const selectedMonth =
     Number.parseInt(appliedFilters.month, 10) > 0
@@ -123,18 +122,32 @@ export default function SheetRowsTable({
       : null;
   const hasYearFilter = Number.isFinite(selectedYear) && selectedYear > 0;
 
-  const completeYearMonths = useMemo(
-    () => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-    [],
-  );
-
   const displayedMonths = useMemo(() => {
     if (selectedMonth) {
       return [selectedMonth];
     }
 
-    if (hasYearFilter) {
-      return completeYearMonths;
+    if (selectedYear > 0) {
+      return availableMonths.length > 0
+        ? availableMonths
+        : (() => {
+            const fallbackMonths = new Set<number>();
+
+            for (const row of rows) {
+              const parsed = parseDateParts(row.date);
+              if (!parsed) {
+                continue;
+              }
+
+              if (Number.isFinite(selectedYear) && parsed.year !== selectedYear) {
+                continue;
+              }
+
+              fallbackMonths.add(parsed.month);
+            }
+
+            return [...fallbackMonths].sort((left, right) => left - right);
+          })();
     }
 
     if (availableMonths.length > 0) {
@@ -155,26 +168,20 @@ export default function SheetRowsTable({
     availableMonths,
     rows,
     selectedMonth,
-    hasYearFilter,
-    completeYearMonths,
-    parseDateParts,
+    selectedYear,
   ]);
 
   const metricColumns = useMemo(() => {
     const visibleColumns = columns.filter((column) => {
       const key = column.toLowerCase();
-
       if (key === 'date') {
         return false;
       }
-
       if (HIDDEN_ROW_KEYS.has(key)) {
         return false;
       }
-
       return true;
     });
-
     const metricByKey = new Map<string, string>();
     for (const column of visibleColumns) {
       metricByKey.set(column.toLowerCase(), column);
@@ -239,7 +246,7 @@ export default function SheetRowsTable({
     });
 
     return monthByDay;
-  }, [rows, selectedYear, selectedMonth, displayedMonths, drafts, parseDateParts]);
+  }, [rows, selectedYear, selectedMonth, displayedMonths, drafts]);
 
   const dayRows = useMemo(() => {
     const createDaySeries = (count: number) =>
@@ -253,13 +260,17 @@ export default function SheetRowsTable({
       });
     });
 
-    if (hasYearFilter && selectedMonth) {
+    if (selectedYear > 0 && selectedMonth) {
       return createDaySeries(
         new Date(selectedYear, selectedMonth, 0).getDate(),
       );
     }
 
-    if (hasYearFilter) {
+    if (selectedYear > 0) {
+      return createDaySeries(FIXED_DAYS_IN_VIEW);
+    }
+
+    if (sourceRows.size > 0) {
       return createDaySeries(FIXED_DAYS_IN_VIEW);
     }
 
@@ -268,7 +279,7 @@ export default function SheetRowsTable({
     }
 
     return [...Array(31).keys()].map((index) => index + 1);
-  }, [selectedMonth, selectedYear, sourceRows, hasYearFilter]);
+  }, [selectedMonth, selectedYear, sourceRows]);
 
   const yearLabel =
     selectedYear > 0 ? `Year ${selectedYear}` : 'Year (all)';

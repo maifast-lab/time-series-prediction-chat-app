@@ -5,10 +5,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  RefreshCw,
 } from "lucide-react";
 import { AppPanel } from "@/components/app/AppPage";
-import NewEntryDialog from "@/components/sheet-editor/NewEntryDialog";
 import SheetFilters from "@/components/sheet-editor/SheetFilters";
 import SheetRowsTable from "@/components/sheet-editor/SheetRowsTable";
 import { useSheetEditor } from "@/components/sheet-editor/useSheetEditor";
@@ -45,33 +43,6 @@ export default function SheetEditorClient() {
                 onFilterChange={editor.updateFilter}
                 onReset={editor.resetFilters}
               />
-            <NewEntryDialog
-              open={editor.isAddingRow}
-              columns={editor.entryColumns}
-              draft={editor.newRowDraft}
-              canSave={editor.canSaveNewRow}
-              isSaving={editor.isCreatingRow}
-              isDisabled={editor.isLoading}
-              onOpenChange={editor.setEntryDialogOpen}
-              onDraftChange={editor.updateNewRowCell}
-              onSave={editor.saveNewRow}
-            />
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={editor.refreshRows}
-              disabled={editor.isLoading}
-              className="rounded-xl"
-            >
-              {editor.isLoading ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
-              Refresh
-            </Button>
-
             {editor.canPage ? (
               <div className="flex items-center gap-2">
                 <Button
