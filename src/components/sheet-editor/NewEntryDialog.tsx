@@ -17,6 +17,9 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+
+const MAX_PASTE_VALUES = 4;
 
 interface NewEntryDialogProps {
   open: boolean;
@@ -43,8 +46,8 @@ export default function NewEntryDialog({
 }: NewEntryDialogProps) {
   const editableColumns = columns.filter((column) => !isDateColumn(column));
 
-  const fillEntryCellsFromPaste = (values: string[], startColumn: string) => {
-    const startIndex = editableColumns.indexOf(startColumn);
+  const fillEntryCellsFromPaste = (values: string[], _startColumn: string) => {
+    const startIndex = editableColumns.length > 0 ? 0 : -1;
     if (startIndex < 0) {
       return;
     }
@@ -108,6 +111,8 @@ export default function NewEntryDialog({
                       id={fieldId}
                       ariaLabel={column}
                       value={draft[column] ?? ''}
+                      onPasteError={(message) => toast.error(message)}
+                      maxPasteValues={MAX_PASTE_VALUES}
                       onPasteValues={(values) =>
                         fillEntryCellsFromPaste(values, column)
                       }
