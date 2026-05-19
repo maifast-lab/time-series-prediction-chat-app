@@ -262,6 +262,60 @@ export default function SheetRowsTable({
     return [...Array(31).keys()].map((index) => index + 1);
   }, [selectedMonth, selectedYear, sourceRows]);
 
+  const editableColumns = useMemo(
+    () => columns.filter((column) => !isDateColumn(column)),
+    [columns],
+  );
+
+  const fillRowCellsFromPaste = (
+    values: string[],
+    startColumn: string,
+    rowKey: string,
+  ) => {
+    const startIndex = editableColumns.indexOf(startColumn);
+    if (startIndex < 0) {
+      return;
+    }
+
+    for (let offset = 0; offset < values.length; offset += 1) {
+      const targetColumn = editableColumns[startIndex + offset];
+      if (!targetColumn) {
+        break;
+      }
+
+      onDraftChange(rowKey, targetColumn, values[offset] ?? '');
+    }
+  };
+
+  const fillPivotCellsFromPaste = (
+    values: string[],
+    startCell: MonthMetricCell,
+    day: number,
+  ) => {
+    const startIndex = pivotColumns.findIndex(
+      (cell) =>
+        cell.month === startCell.month && cell.metric === startCell.metric,
+    );
+
+    if (startIndex < 0) {
+      return;
+    }
+
+    for (let offset = 0; offset < values.length; offset += 1) {
+      const targetCell = pivotColumns[startIndex + offset];
+      if (!targetCell) {
+        break;
+      }
+
+      const targetSourceRow = sourceRows.get(targetCell.month)?.get(day);
+      const targetRowKey = targetSourceRow
+        ? targetSourceRow.rowKey
+        : `__new-${selectedYear}-${targetCell.month}-${day}`;
+
+      onDraftChange(targetRowKey, targetCell.metric, values[offset] ?? '');
+    }
+  };
+
   const yearLabel =
     selectedYear > 0 ? `Year ${selectedYear}` : 'Year (all)';
   const yearHeaderStyle =
@@ -500,6 +554,9 @@ export default function SheetRowsTable({
                               id={`cell-${normalizeFieldId(newRowKey)}-${normalizeFieldId(cell.metric)}-${normalizeFieldId(String(cell.month))}-desktop`}
                               ariaLabel={cell.metric}
                               value={rowDraft[cell.metric] ?? ''}
+                              onPasteValues={(values) =>
+                                fillPivotCellsFromPaste(values, cell, day)
+                              }
                               onChange={(value) =>
                                 onDraftChange(newRowKey, cell.metric, value)
                               }
@@ -518,6 +575,9 @@ export default function SheetRowsTable({
                               id={`cell-${normalizeFieldId(sourceRow.rowKey)}-${normalizeFieldId(cell.metric)}-${normalizeFieldId(String(cell.month))}-desktop`}
                             ariaLabel={cell.metric}
                             value={sourceRow.draft[cell.metric] ?? ''}
+                              onPasteValues={(values) =>
+                                fillPivotCellsFromPaste(values, cell, day)
+                              }
                             onChange={(value) =>
                               onDraftChange(sourceRow.rowKey, cell.metric, value)
                             }
@@ -588,6 +648,9 @@ export default function SheetRowsTable({
                           id={`cell-${normalizeFieldId(rowKey)}-${normalizeFieldId(column)}-desktop`}
                           ariaLabel={column}
                           value={draft[column] ?? ''}
+                          onPasteValues={(values) =>
+                            fillRowCellsFromPaste(values, column, rowKey)
+                          }
                           onChange={(value) =>
                             onDraftChange(rowKey, column, value)
                           }
@@ -656,6 +719,9 @@ export default function SheetRowsTable({
                           ariaLabel={column}
                           column={column}
                           value={draft[column] ?? ''}
+                          onPasteValues={(values) =>
+                            fillRowCellsFromPaste(values, column, rowKey)
+                          }
                           onChange={(value) =>
                             onDraftChange(rowKey, column, value)
                           }

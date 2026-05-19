@@ -41,6 +41,24 @@ export default function NewEntryDialog({
   onDraftChange,
   onSave,
 }: NewEntryDialogProps) {
+  const editableColumns = columns.filter((column) => !isDateColumn(column));
+
+  const fillEntryCellsFromPaste = (values: string[], startColumn: string) => {
+    const startIndex = editableColumns.indexOf(startColumn);
+    if (startIndex < 0) {
+      return;
+    }
+
+    for (let offset = 0; offset < values.length; offset += 1) {
+      const targetColumn = editableColumns[startIndex + offset];
+      if (!targetColumn) {
+        break;
+      }
+
+      onDraftChange(targetColumn, values[offset] ?? '');
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
@@ -90,6 +108,9 @@ export default function NewEntryDialog({
                       id={fieldId}
                       ariaLabel={column}
                       value={draft[column] ?? ''}
+                      onPasteValues={(values) =>
+                        fillEntryCellsFromPaste(values, column)
+                      }
                       onChange={(value) => onDraftChange(column, value)}
                     />
                   )}

@@ -7,6 +7,7 @@ import {
   isDateColumn,
 } from '@/components/sheet-editor/sheet-editor-date';
 import { cn } from '@/lib/utils';
+import { type ClipboardEvent } from 'react';
 
 interface CellEditorProps {
   column: string;
@@ -14,18 +15,32 @@ interface CellEditorProps {
   ariaLabel?: string;
   value: string;
   onChange: (value: string) => void;
+  onPasteValues?: (values: string[]) => void;
+}
+
+function parsePastedValues(value: string): string[] {
+  const normalized = value
+    .replace(/\r\n/g, '\n')
+    .replace(/[\t,]/g, ' ')
+    .trim();
+
+  if (!normalized) {
+    return [];
+  }
+
+  return normalized.split(/\s+/).filter(Boolean);
 }
 
 function isLongCellValue(value: string) {
   return value.length > 90 || value.includes('\n') || /^[{[]/.test(value);
 }
-
 export default function CellEditor({
   column,
   id,
   ariaLabel,
   value,
   onChange,
+  onPasteValues,
 }: CellEditorProps) {
   if (isDateColumn(column)) {
     return <ReadOnlyCellValue value={value || getTodayDateValue()} />;
@@ -35,6 +50,23 @@ export default function CellEditor({
     'w-full h-8 max-w-[36px] min-w-0 rounded-xl bg-white/80 text-sm dark:bg-white/5 border-0 !px-1 !py-1',
   );
 
+  const handlePaste = (
+    event: ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    const pasted = event.clipboardData?.getData('text');
+    if (!pasted) {
+      return;
+    }
+
+    const values = parsePastedValues(pasted);
+    if (values.length <= 1 || !onPasteValues) {
+      return;
+    }
+
+    event.preventDefault();
+    onPasteValues(values);
+  };
+
   if (isLongCellValue(value)) {
     return (
       <Textarea
@@ -42,6 +74,7 @@ export default function CellEditor({
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onPaste={handlePaste}
         className={cn(className, 'resize-none')}
       />
     );
@@ -53,6 +86,7 @@ export default function CellEditor({
       aria-label={ariaLabel}
       value={value}
       onChange={(event) => onChange(event.target.value)}
+      onPaste={handlePaste}
       className={className}
     />
   );
