@@ -2,6 +2,7 @@
 
 import { Loader2, Save } from 'lucide-react';
 import { useMemo } from 'react';
+import { toast } from 'sonner';
 
 import CellEditor from '@/components/sheet-editor/CellEditor';
 import { isDateColumn } from '@/components/sheet-editor/sheet-editor-date';
@@ -31,6 +32,7 @@ const MONTH_LABELS = [
 ];
 const SERIES_METRICS = ['FB', 'GB', 'GL', 'DS'];
 const ALL_YEAR_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const MAX_PASTE_VALUES = 4;
 
 const HIDDEN_ROW_KEYS = new Set([
   'id',
@@ -269,13 +271,10 @@ export default function SheetRowsTable({
 
   const fillRowCellsFromPaste = (
     values: string[],
-    startColumn: string,
+    _startColumn: string,
     rowKey: string,
   ) => {
-    const startIndex = editableColumns.indexOf(startColumn);
-    if (startIndex < 0) {
-      return;
-    }
+    const startIndex = editableColumns.length > 0 ? 0 : -1;
 
     for (let offset = 0; offset < values.length; offset += 1) {
       const targetColumn = editableColumns[startIndex + offset];
@@ -293,8 +292,7 @@ export default function SheetRowsTable({
     day: number,
   ) => {
     const startIndex = pivotColumns.findIndex(
-      (cell) =>
-        cell.month === startCell.month && cell.metric === startCell.metric,
+      (cell) => cell.month === startCell.month,
     );
 
     if (startIndex < 0) {
@@ -303,7 +301,7 @@ export default function SheetRowsTable({
 
     for (let offset = 0; offset < values.length; offset += 1) {
       const targetCell = pivotColumns[startIndex + offset];
-      if (!targetCell) {
+      if (!targetCell || targetCell.month !== startCell.month) {
         break;
       }
 
@@ -549,7 +547,9 @@ export default function SheetRowsTable({
                             key={`day-${day}-${cell.month}-${cell.metric}`}
                             className='w-[36px] min-w-[36px] max-w-[36px] border-l border-slate-200/70 '
                           >
-                            <CellEditor
+      <CellEditor
+                              onPasteError={(message) => toast.error(message)}
+                              maxPasteValues={MAX_PASTE_VALUES}
                               column={cell.metric}
                               id={`cell-${normalizeFieldId(newRowKey)}-${normalizeFieldId(cell.metric)}-${normalizeFieldId(String(cell.month))}-desktop`}
                               ariaLabel={cell.metric}
@@ -570,10 +570,12 @@ export default function SheetRowsTable({
                             key={`day-${day}-${cell.month}-${cell.metric}`}
                             className='w-[36px] min-w-[36px] max-w-[36px] border-l border-slate-200/70'
                           >
-                            <CellEditor
-                              column={cell.metric}
-                              id={`cell-${normalizeFieldId(sourceRow.rowKey)}-${normalizeFieldId(cell.metric)}-${normalizeFieldId(String(cell.month))}-desktop`}
+                          <CellEditor
+                            column={cell.metric}
+                            id={`cell-${normalizeFieldId(sourceRow.rowKey)}-${normalizeFieldId(cell.metric)}-${normalizeFieldId(String(cell.month))}-desktop`}
                             ariaLabel={cell.metric}
+                            onPasteError={(message) => toast.error(message)}
+                            maxPasteValues={MAX_PASTE_VALUES}
                             value={sourceRow.draft[cell.metric] ?? ''}
                               onPasteValues={(values) =>
                                 fillPivotCellsFromPaste(values, cell, day)
@@ -648,6 +650,8 @@ export default function SheetRowsTable({
                           id={`cell-${normalizeFieldId(rowKey)}-${normalizeFieldId(column)}-desktop`}
                           ariaLabel={column}
                           value={draft[column] ?? ''}
+                          onPasteError={(message) => toast.error(message)}
+                          maxPasteValues={MAX_PASTE_VALUES}
                           onPasteValues={(values) =>
                             fillRowCellsFromPaste(values, column, rowKey)
                           }
@@ -719,6 +723,8 @@ export default function SheetRowsTable({
                           ariaLabel={column}
                           column={column}
                           value={draft[column] ?? ''}
+                          onPasteError={(message) => toast.error(message)}
+                          maxPasteValues={MAX_PASTE_VALUES}
                           onPasteValues={(values) =>
                             fillRowCellsFromPaste(values, column, rowKey)
                           }

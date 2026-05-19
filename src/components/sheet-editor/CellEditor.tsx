@@ -16,6 +16,14 @@ interface CellEditorProps {
   value: string;
   onChange: (value: string) => void;
   onPasteValues?: (values: string[]) => void;
+  onPasteError?: (message: string) => void;
+  maxPasteValues?: number;
+}
+
+const DEFAULT_MAX_PASTE_VALUES = 4;
+
+function isNumericValue(value: string) {
+  return /^\d+$/.test(value);
 }
 
 function parsePastedValues(value: string): string[] {
@@ -41,6 +49,8 @@ export default function CellEditor({
   value,
   onChange,
   onPasteValues,
+  onPasteError,
+  maxPasteValues = DEFAULT_MAX_PASTE_VALUES,
 }: CellEditorProps) {
   if (isDateColumn(column)) {
     return <ReadOnlyCellValue value={value || getTodayDateValue()} />;
@@ -60,6 +70,21 @@ export default function CellEditor({
 
     const values = parsePastedValues(pasted);
     if (values.length <= 1 || !onPasteValues) {
+      return;
+    }
+
+    const invalidValue = values.find((item) => !isNumericValue(item));
+    if (invalidValue) {
+      event.preventDefault();
+      onPasteError?.(`Only numbers are allowed. Found "${invalidValue}".`);
+      return;
+    }
+
+    const sanitized = values.slice(0, maxPasteValues);
+    if (values.length > maxPasteValues) {
+      event.preventDefault();
+      onPasteError?.(`Only ${maxPasteValues} values are allowed.`);
+      onPasteValues(sanitized);
       return;
     }
 
