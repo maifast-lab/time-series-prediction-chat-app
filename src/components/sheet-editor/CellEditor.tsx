@@ -32,8 +32,7 @@ export default function CellEditor({
   }
 
   const className = cn(
-    'min-w-44 rounded-xl bg-white/80 text-sm dark:bg-white/5',
-    isLongCellValue(value) ? 'min-h-20' : 'h-10',
+    'w-full h-8 max-w-[36px] min-w-0 rounded-xl bg-white/80 text-sm dark:bg-white/5 border-0 !px-1 !py-1',
   );
 
   if (isLongCellValue(value)) {
@@ -43,7 +42,7 @@ export default function CellEditor({
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={className}
+        className={cn(className, 'resize-none')}
       />
     );
   }
@@ -61,7 +60,7 @@ export default function CellEditor({
 
 function ReadOnlyCellValue({ value }: { value: string }) {
   return (
-    <div className='flex min-h-10 min-w-44 items-center rounded-xl border border-slate-200 bg-slate-100/80 px-3 text-sm text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300'>
+    <div className='flex h-8 w-full min-w-0 items-center rounded-xl bg-slate-100/80 px-1 text-sm text-slate-600 dark:bg-white/5 dark:text-slate-300'>
       {value}
     </div>
   );

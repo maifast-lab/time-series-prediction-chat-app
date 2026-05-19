@@ -410,14 +410,14 @@ export default function SheetRowsTable({
                 <th
                   rowSpan={3}
                   scope='col'
-                  className='sticky left-0 top-0 z-30 border-b border-slate-200/80 bg-white px-4 py-3 font-semibold dark:border-white/10 dark:bg-slate-950'
+                  className='sticky left-0 top-0 z-30 border-b border-slate-200/80 bg-white  font-semibold dark:border-white/10 dark:bg-slate-950'
                 >
                   Day
                 </th>
                 <th
                   colSpan={Math.max(pivotColumns.length, 1)}
                   scope='col'
-                  className='sticky top-0 z-20 border-b border-slate-200/80 bg-white px-4 py-3 text-center font-semibold dark:border-white/10'
+                  className='sticky  z-20 border-b border-slate-200/80 bg-white  text-center font-semibold dark:border-white/10'
                   style={yearHeaderStyle ?? undefined}
                 >
                   {yearLabel}
@@ -425,7 +425,7 @@ export default function SheetRowsTable({
                 <th
                   rowSpan={3}
                   scope='col'
-                  className='sticky right-0 top-0 z-30 border-b border-slate-200/80 bg-white px-4 py-3 text-right font-semibold dark:border-white/10 dark:bg-slate-950'
+                  className='sticky right-0  z-30 border-b border-slate-200/80 bg-white  text-right font-semibold dark:border-white/10 dark:bg-slate-950'
                 >
                   Action
                 </th>
@@ -437,7 +437,7 @@ export default function SheetRowsTable({
                       key={`month-${month}`}
                       scope='col'
                       colSpan={Math.max(metricColumns.length, 1)}
-                      className={`sticky top-0 z-20 border-b border-slate-200/80 px-4 py-2 text-center font-semibold ${monthHeaderByIndex.get(month)}`}
+                      className={`sticky z-20 border-b border-slate-200/80 text-center font-semibold ${monthHeaderByIndex.get(month)}`}
                     >
                       {MONTH_LABELS[month] || String(month)}
                     </th>
@@ -446,7 +446,7 @@ export default function SheetRowsTable({
                   <th
                     scope='col'
                     rowSpan={2}
-                    className='sticky top-0 border-b border-slate-200/80 bg-white px-4 py-2 text-left font-semibold dark:bg-slate-950'
+                    className='sticky  border-b border-slate-200/80 bg-white text-left font-semibold dark:bg-slate-950'
                   >
                     No months
                   </th>
@@ -458,7 +458,7 @@ export default function SheetRowsTable({
                     <th
                       key={`${cell.month}-${cell.metric}`}
                       scope='col'
-                      className={`sticky top-0 z-10 border-b border-slate-200/80 px-2 py-2 text-center font-medium ${monthHeaderByIndex.get(cell.month)}`}
+                      className={`sticky top-0 z-10 border-b border-slate-200/80  text-center font-medium ${monthHeaderByIndex.get(cell.month)}`}
                     >
                       {cell.metric.toUpperCase()}
                     </th>
@@ -466,7 +466,7 @@ export default function SheetRowsTable({
                 ) : (
                   <th
                     scope='col'
-                    className='sticky top-0 border-b border-slate-200/80 bg-white px-4 py-2 font-medium dark:border-white/10 dark:bg-slate-950'
+                    className='sticky top-0 border-b border-slate-200/80 bg-white font-medium dark:border-white/10 dark:bg-slate-950'
                   >
                     Value
                   </th>
@@ -479,7 +479,7 @@ export default function SheetRowsTable({
                   key={`day-${day}`}
                   className='border-b border-slate-200/70 align-top last:border-b-0 dark:border-white/10'
                 >
-                  <td className='sticky left-0 z-10 border-r border-slate-200/80 bg-white px-4 py-3 text-sm font-semibold text-slate-700 dark:border-white/10 dark:bg-slate-950'>
+                  <td className='sticky left-0 z-10 border-r border-slate-200/80 bg-white text-sm font-semibold text-slate-700 dark:border-white/10 dark:bg-slate-950'>
                     {day}
                   </td>
                   {pivotColumns.length > 0 ? (
@@ -493,7 +493,7 @@ export default function SheetRowsTable({
                         return (
                           <td
                             key={`day-${day}-${cell.month}-${cell.metric}`}
-                            className='min-w-[114px] px-2 py-3'
+                            className='w-[36px] min-w-[36px] max-w-[36px] border-l border-slate-200/70 '
                           >
                             <CellEditor
                               column={cell.metric}
@@ -508,14 +508,14 @@ export default function SheetRowsTable({
                         );
                       }
 
-                      return (
-                        <td
-                          key={`day-${day}-${cell.month}-${cell.metric}`}
-                          className='min-w-[114px] px-2 py-3'
-                        >
-                          <CellEditor
-                            column={cell.metric}
-                            id={`cell-${normalizeFieldId(sourceRow.rowKey)}-${normalizeFieldId(cell.metric)}-${normalizeFieldId(String(cell.month))}-desktop`}
+                        return (
+                          <td
+                            key={`day-${day}-${cell.month}-${cell.metric}`}
+                            className='w-[36px] min-w-[36px] max-w-[36px] border-l border-slate-200/70'
+                          >
+                            <CellEditor
+                              column={cell.metric}
+                              id={`cell-${normalizeFieldId(sourceRow.rowKey)}-${normalizeFieldId(cell.metric)}-${normalizeFieldId(String(cell.month))}-desktop`}
                             ariaLabel={cell.metric}
                             value={sourceRow.draft[cell.metric] ?? ''}
                             onChange={(value) =>
@@ -526,11 +526,11 @@ export default function SheetRowsTable({
                       );
                     })
                   ) : (
-                    <td className='px-4 py-3 text-xs text-slate-400'>
+                    <td className='px-2 py-2 text-xs text-slate-400'>
                       —
                     </td>
                   )}
-                  <td className='sticky right-0 bg-white/95 px-4 py-3 text-right dark:bg-slate-950/95'>
+                  <td className='sticky right-0 border-l border-slate-200/70 bg-white/95  text-right dark:bg-slate-950/95'>
                     <SaveRowButton
                       isDirty={isDayDirty(day)}
                       isSaving={isDaySaving(day)}
@@ -554,14 +554,14 @@ export default function SheetRowsTable({
                   <th
                     key={column}
                     scope='col'
-                    className='border-b border-slate-200/80 px-4 py-3 font-semibold dark:border-white/10'
+                    className='border-b border-slate-200/80  font-semibold dark:border-white/10'
                   >
                     {column}
                   </th>
                 ))}
                 <th
                   scope='col'
-                  className='sticky right-0 border-b border-slate-200/80 bg-slate-100/95 px-4 py-3 text-right font-semibold dark:border-white/10 dark:bg-slate-950'
+                  className='sticky right-0 border-b border-slate-200/80 bg-slate-100/95 p text-right font-semibold dark:border-white/10 dark:bg-slate-950'
                 >
                   Action
                 </th>
@@ -579,7 +579,10 @@ export default function SheetRowsTable({
                     className='border-b border-slate-200/70 align-top last:border-b-0 dark:border-white/10'
                   >
                     {columns.map((column) => (
-                      <td key={column} className='px-4 py-3'>
+                      <td
+                        key={column}
+                        className='w-[36px] min-w-[36px] max-w-[36px] border-l border-slate-200/70 '
+                      >
                         <CellEditor
                           column={column}
                           id={`cell-${normalizeFieldId(rowKey)}-${normalizeFieldId(column)}-desktop`}
@@ -591,7 +594,7 @@ export default function SheetRowsTable({
                         />
                       </td>
                     ))}
-                    <td className='sticky right-0 bg-white/95 px-4 py-3 text-right dark:bg-slate-950/95'>
+                    <td className='sticky right-0 border-l border-slate-200/70 bg-white/95 text-right dark:bg-slate-950/95'>
                       <SaveRowButton
                         isDirty={isDirty}
                         isSaving={savingRowKey === rowKey}
@@ -606,7 +609,7 @@ export default function SheetRowsTable({
         </div>
       )}
 
-      <div className='space-y-4 p-4 lg:hidden'>
+      <div className='space-y-2  lg:hidden'>
         {rows.map((row, rowIndex) => {
           const rowKey = getRowKey(row, rowIndex);
           const draft = drafts[rowKey] ?? {};
@@ -615,9 +618,9 @@ export default function SheetRowsTable({
           return (
             <div
               key={rowKey}
-              className='rounded-2xl border border-slate-200/80 bg-white/80 p-4 dark:border-white/10 dark:bg-white/5'
+                className='rounded-xl border border-slate-200/80 bg-white/80 px-2 py-2 dark:border-white/10 dark:bg-white/5'
             >
-              <div className='mb-4 flex items-center justify-between gap-3'>
+                <div className='mb-2 flex items-center justify-between gap-2'>
                 <div>
                   <p className='text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400'>
                     Row {rowIndex + 1}
@@ -633,7 +636,7 @@ export default function SheetRowsTable({
                 />
               </div>
 
-              <div className='space-y-3'>
+                <div className='space-y-2'>
                 {columns.map((column) => (
                   <div key={column} className='space-y-1.5'>
                     {isDateColumn(column) ? (
