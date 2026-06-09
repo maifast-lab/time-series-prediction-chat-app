@@ -19,7 +19,7 @@ export default function SidebarChatList({
   onRenameChat,
 }: SidebarChatListProps) {
   return (
-    <div className='no-scrollbar flex-1 space-y-2 overflow-y-auto px-2 py-2'>
+    <div className=' flex-1 space-y-2 overflow-y-auto px-2 py-2'>
       <div className='px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 dark:text-gray-500'>
         Conversations
       </div>
