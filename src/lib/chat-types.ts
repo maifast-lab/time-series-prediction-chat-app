@@ -22,7 +22,7 @@ export interface ChatPageData {
   chat: ChatDetails;
   messages: ChatMessage[];
   hasUploadedData: boolean;
-  activeDataSourceName: string;
+  activeSheetDataName: string;
 }
 
 export interface ChatsOverviewData {

@@ -25,21 +25,21 @@ interface ChatPageClientProps {
   initialChat: ChatPageData['chat'];
   initialMessages: ChatPageData['messages'];
   initialHasUploadedData: ChatPageData['hasUploadedData'];
-  initialActiveDataSourceName: ChatPageData['activeDataSourceName'];
+  initialActiveSheetDataName: ChatPageData['activeSheetDataName'];
 }
 
 export default function ChatPageClient({
   initialChat,
   initialMessages,
   initialHasUploadedData,
-  initialActiveDataSourceName,
+  initialActiveSheetDataName,
 }: ChatPageClientProps) {
   const router = useRouter();
   const [chat, setChat] = useState(initialChat);
   const [chatMessages, setChatMessages] = useState(initialMessages);
   const [hasUploadedData, setHasUploadedData] = useState(initialHasUploadedData);
-  const [activeDataSourceName, setActiveDataSourceName] = useState(
-    initialActiveDataSourceName,
+  const [activeSheetDataName, setActiveSheetDataName] = useState(
+    initialActiveSheetDataName,
   );
   const [isResponding, setIsResponding] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -55,9 +55,9 @@ export default function ChatPageClient({
     setChat(initialChat);
     setChatMessages(initialMessages);
     setHasUploadedData(initialHasUploadedData);
-    setActiveDataSourceName(initialActiveDataSourceName);
+    setActiveSheetDataName(initialActiveSheetDataName);
   }, [
-    initialActiveDataSourceName,
+    initialActiveSheetDataName,
     initialChat,
     initialHasUploadedData,
     initialMessages,
@@ -230,7 +230,7 @@ export default function ChatPageClient({
         inputText={inputText}
         hasUploadedData={hasUploadedData}
         isResponding={isResponding}
-        activeDataSourceName={activeDataSourceName}
+        activeSheetDataName={activeSheetDataName}
         composerNotice={composerNotice}
         onInputChange={setInputText}
         onSubmit={handleSendMessage}

@@ -36,7 +36,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
         initialChat={chatPageData.chat}
         initialMessages={chatPageData.messages}
         initialHasUploadedData={chatPageData.hasUploadedData}
-        initialActiveDataSourceName={chatPageData.activeDataSourceName}
+        initialActiveSheetDataName={chatPageData.activeSheetDataName}
       />
     </MainLayout>
   );
