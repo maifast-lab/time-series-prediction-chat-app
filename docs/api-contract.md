@@ -7,9 +7,9 @@ Keep this frontend separate while `www` and `admin` use different subdomains. Do
 ## Base URLs
 
 - Public frontend: `NEXT_PUBLIC_SITE_URL`, normally the `www` origin.
-- Admin API: `NEXT_PUBLIC_BACKEND_URL`.
-- Google auth exchange path: `NEXT_PUBLIC_AUTH_GOOGLE_EXCHANGE_PATH`, resolved against `NEXT_PUBLIC_BACKEND_URL`.
-- Python cleaner API: `NEXT_PUBLIC_PYTHON_BACKEND_URL`.
+- Admin API: `NEXT_PUBLIC_BACKEND_URL`, used by server-side route handlers.
+- Google auth exchange path: local `/api/auth/google`, which forwards to the Admin API and stores the access token in httpOnly cookies.
+- Python cleaner API: `PYTHON_BACKEND_URL`, used only by the server-side `/api/clean-data` route.
 
 The Admin API must allow requests from `NEXT_PUBLIC_SITE_URL` through CORS.
 
@@ -27,7 +27,7 @@ The frontend treats a non-2xx HTTP status or `{ ok: false }` as a failed request
 
 ## Authentication
 
-The frontend posts Google Identity Services credentials to:
+The browser posts Google Identity Services credentials to the public frontend:
 
 ```http
 POST /api/auth/google
@@ -71,13 +71,7 @@ Target success response:
 
 The frontend also accepts the legacy root-level token response during migration. New Admin work should use the envelope above.
 
-Authenticated frontend requests send:
-
-```http
-Authorization: <tokenType> <accessToken>
-```
-
-`tokenType` defaults to `Bearer`.
+Authenticated browser requests call same-origin `/api/*` paths. The public frontend route handlers read the httpOnly session cookie and forward `Authorization: Bearer <accessToken>` to the Admin API.
 
 ## Admin Endpoints Used
 
@@ -96,10 +90,10 @@ Authorization: <tokenType> <accessToken>
 
 ## Python Cleaner Endpoint
 
-File uploads are first sent to:
+File uploads are first sent to the public frontend:
 
 ```http
-POST /v1/clean_data
+POST /api/clean-data
 ```
 
-The cleaner response must include one of `cleanedData`, `cleaned_data`, or `data`. The frontend forwards the cleaned payload to `POST /api/data-sources` on the Admin API.
+The server-side route sends the file to the Python cleaner at `/api/v1/clean_data` with the authenticated user id. The cleaner response must include one of `cleanedData`, `cleaned_data`, or `data`. The frontend then forwards the cleaned payload to `POST /api/data-sources`.

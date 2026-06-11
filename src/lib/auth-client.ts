@@ -1,5 +1,3 @@
-import { API_BASE_URL } from '@/lib/api-base-url';
-
 export interface AuthUser {
   id?: string | null;
   name?: string | null;
@@ -82,9 +80,10 @@ declare global {
 }
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? '';
-const GOOGLE_AUTH_EXCHANGE_PATH =
-  process.env.NEXT_PUBLIC_AUTH_GOOGLE_EXCHANGE_PATH?.trim() ||
-  '/api/auth/google';
+const GOOGLE_AUTH_EXCHANGE_PATH = '/api/auth/google';
+const AUTH_SESSION_PATH = '/api/auth/session';
+const AUTH_LOGOUT_PATH = '/api/auth/logout';
+const HTTP_ONLY_SESSION_TOKEN = 'http-only-session';
 
 export const AUTH_STATE_CHANGED_EVENT = 'maifast-auth-changed';
 
@@ -121,10 +120,6 @@ export class AuthClientError extends Error {
 
 function isBrowser() {
   return typeof window !== 'undefined';
-}
-
-function resolveAuthUrl(path: string) {
-  return new URL(path, API_BASE_URL).toString();
 }
 
 function readObject(value: unknown) {
@@ -252,22 +247,18 @@ function normalizeAuthUser(user: unknown): AuthUser | null {
 
 function normalizeStoredAuthState(value: unknown) {
   const record = readObject(value);
-  const accessToken = pickString(record?.accessToken);
-
-  if (!accessToken) {
-    return null;
-  }
+  const user = normalizeAuthUser(record?.user);
 
   const authState: StoredAuthState = {
-    user: normalizeAuthUser(record?.user),
+    user,
     tokenType: normalizeTokenType(record?.tokenType),
-    accessToken,
-    refreshToken: pickString(record?.refreshToken),
+    accessToken: HTTP_ONLY_SESSION_TOKEN,
+    refreshToken: null,
     accessTokenExpiresAt: pickNumber(record?.accessTokenExpiresAt),
-    refreshTokenExpiresAt: pickNumber(record?.refreshTokenExpiresAt),
+    refreshTokenExpiresAt: null,
   };
 
-  if (isExpired(authState.accessTokenExpiresAt)) {
+  if (!authState.user || isExpired(authState.accessTokenExpiresAt)) {
     return null;
   }
 
@@ -290,34 +281,17 @@ function normalizeGoogleAuthResponse(body: unknown) {
 
   const payload =
     (readObject(record.data) as GoogleAuthResponse | null) ?? record;
-  const accessToken = pickString(payload.accessToken);
-
-  if (!accessToken) {
-    throw new AuthClientError(
-      readErrorMessage(
-        payload,
-        readErrorMessage(
-          record,
-          'Google sign-in did not return an access token.',
-        ),
-      ),
-      500,
-    );
-  }
 
   return {
     user: normalizeAuthUser(payload.user),
     tokenType: normalizeTokenType(payload.tokenType),
-    accessToken,
-    refreshToken: pickString(payload.refreshToken),
+    accessToken: HTTP_ONLY_SESSION_TOKEN,
+    refreshToken: null,
     accessTokenExpiresAt: normalizeExpiresAt(
       payload.accessTokenExpiresIn,
       payload.accessTokenExpiresAt,
     ),
-    refreshTokenExpiresAt: normalizeExpiresAt(
-      payload.refreshTokenExpiresIn,
-      payload.refreshTokenExpiresAt,
-    ),
+    refreshTokenExpiresAt: null,
   } satisfies StoredAuthState;
 }
 
@@ -340,26 +314,6 @@ function readCookie(name: string) {
   }
 
   return null;
-}
-
-function writeCookie(name: string, value: string, expiresAt: number | null) {
-  if (!isBrowser()) {
-    return;
-  }
-
-  const maxAge =
-    typeof expiresAt === 'number'
-      ? Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
-      : null;
-
-  document.cookie = [
-    `${name}=${encodeURIComponent(value)}`,
-    'Path=/',
-    'SameSite=Lax',
-    maxAge !== null ? `Max-Age=${maxAge}` : null,
-  ]
-    .filter(Boolean)
-    .join('; ');
 }
 
 function deleteCookie(name: string) {
@@ -407,21 +361,18 @@ function dispatchAuthStateChanged() {
   window.dispatchEvent(new Event(AUTH_STATE_CHANGED_EVENT));
 }
 
-function persistAuthState(authState: StoredAuthState) {
+function persistAuthState(
+  authState: StoredAuthState,
+  options: { notify?: boolean } = {},
+) {
   const serializedUser = serializeAuthUser(authState.user);
   const accessTokenExpiresAt =
     authState.accessTokenExpiresAt !== null
       ? String(authState.accessTokenExpiresAt)
       : null;
-  const refreshTokenExpiresAt =
-    authState.refreshTokenExpiresAt !== null
-      ? String(authState.refreshTokenExpiresAt)
-      : null;
-  const userExpiry =
-    authState.refreshTokenExpiresAt ?? authState.accessTokenExpiresAt;
 
-  writeLocalStorageValue(AUTH_ACCESS_TOKEN_STORAGE_KEY, authState.accessToken);
-  writeLocalStorageValue(AUTH_REFRESH_TOKEN_STORAGE_KEY, authState.refreshToken);
+  writeLocalStorageValue(AUTH_ACCESS_TOKEN_STORAGE_KEY, null);
+  writeLocalStorageValue(AUTH_REFRESH_TOKEN_STORAGE_KEY, null);
   writeLocalStorageValue(AUTH_TOKEN_TYPE_STORAGE_KEY, authState.tokenType);
   writeLocalStorageValue(AUTH_USER_STORAGE_KEY, serializedUser);
   writeLocalStorageValue(
@@ -430,51 +381,15 @@ function persistAuthState(authState: StoredAuthState) {
   );
   writeLocalStorageValue(
     AUTH_REFRESH_TOKEN_EXPIRES_AT_STORAGE_KEY,
-    refreshTokenExpiresAt,
+    null,
   );
 
-  writeCookie(
-    AUTH_ACCESS_TOKEN_COOKIE,
-    authState.accessToken,
-    authState.accessTokenExpiresAt,
-  );
-  writeCookie(
-    AUTH_REFRESH_TOKEN_COOKIE,
-    authState.refreshToken ?? '',
-    authState.refreshTokenExpiresAt,
-  );
-  writeCookie(AUTH_TOKEN_TYPE_COOKIE, authState.tokenType, userExpiry);
-
-  if (serializedUser) {
-    writeCookie(AUTH_USER_COOKIE, serializedUser, userExpiry);
-  } else {
-    deleteCookie(AUTH_USER_COOKIE);
+  if (options.notify ?? true) {
+    dispatchAuthStateChanged();
   }
-
-  if (accessTokenExpiresAt) {
-    writeCookie(
-      AUTH_ACCESS_TOKEN_EXPIRES_AT_COOKIE,
-      accessTokenExpiresAt,
-      authState.accessTokenExpiresAt,
-    );
-  } else {
-    deleteCookie(AUTH_ACCESS_TOKEN_EXPIRES_AT_COOKIE);
-  }
-
-  if (refreshTokenExpiresAt) {
-    writeCookie(
-      AUTH_REFRESH_TOKEN_EXPIRES_AT_COOKIE,
-      refreshTokenExpiresAt,
-      authState.refreshTokenExpiresAt,
-    );
-  } else {
-    deleteCookie(AUTH_REFRESH_TOKEN_EXPIRES_AT_COOKIE);
-  }
-
-  dispatchAuthStateChanged();
 }
 
-export function clearStoredAuth() {
+export function clearStoredAuth(options: { notify?: boolean } = {}) {
   writeLocalStorageValue(AUTH_ACCESS_TOKEN_STORAGE_KEY, null);
   writeLocalStorageValue(AUTH_REFRESH_TOKEN_STORAGE_KEY, null);
   writeLocalStorageValue(AUTH_TOKEN_TYPE_STORAGE_KEY, null);
@@ -489,10 +404,12 @@ export function clearStoredAuth() {
   deleteCookie(AUTH_ACCESS_TOKEN_EXPIRES_AT_COOKIE);
   deleteCookie(AUTH_REFRESH_TOKEN_EXPIRES_AT_COOKIE);
 
-  dispatchAuthStateChanged();
+  if (options.notify ?? true) {
+    dispatchAuthStateChanged();
+  }
 }
 
-export function getStoredAuth() {
+export function getStoredAuth(options: { notifyOnInvalid?: boolean } = {}) {
   if (!isBrowser()) {
     return null;
   }
@@ -504,18 +421,12 @@ export function getStoredAuth() {
     tokenType:
       readLocalStorageValue(AUTH_TOKEN_TYPE_STORAGE_KEY) ??
       readCookie(AUTH_TOKEN_TYPE_COOKIE),
-    accessToken:
-      readLocalStorageValue(AUTH_ACCESS_TOKEN_STORAGE_KEY) ??
-      readCookie(AUTH_ACCESS_TOKEN_COOKIE),
-    refreshToken:
-      readLocalStorageValue(AUTH_REFRESH_TOKEN_STORAGE_KEY) ??
-      readCookie(AUTH_REFRESH_TOKEN_COOKIE),
+    accessToken: HTTP_ONLY_SESSION_TOKEN,
+    refreshToken: null,
     accessTokenExpiresAt:
       readLocalStorageValue(AUTH_ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY) ??
       readCookie(AUTH_ACCESS_TOKEN_EXPIRES_AT_COOKIE),
-    refreshTokenExpiresAt:
-      readLocalStorageValue(AUTH_REFRESH_TOKEN_EXPIRES_AT_STORAGE_KEY) ??
-      readCookie(AUTH_REFRESH_TOKEN_EXPIRES_AT_COOKIE),
+    refreshTokenExpiresAt: null,
   };
   const authState = normalizeStoredAuthState(rawAuthState);
 
@@ -523,12 +434,9 @@ export function getStoredAuth() {
     if (
       rawAuthState.user ||
       rawAuthState.tokenType ||
-      rawAuthState.accessToken ||
-      rawAuthState.refreshToken ||
-      rawAuthState.accessTokenExpiresAt ||
-      rawAuthState.refreshTokenExpiresAt
+      rawAuthState.accessTokenExpiresAt
     ) {
-      clearStoredAuth();
+      clearStoredAuth({ notify: options.notifyOnInvalid ?? true });
     }
 
     return null;
@@ -538,8 +446,7 @@ export function getStoredAuth() {
 }
 
 export function getStoredAuthorizationHeader() {
-  const authState = getStoredAuth();
-  return getAuthorizationHeaderValue(authState);
+  return null;
 }
 
 export function getAuthorizationHeaderValue(
@@ -640,14 +547,12 @@ export async function exchangeGoogleCredential(
   credential: string,
   profile?: GoogleIdTokenPayload | null,
 ) {
-  const url = resolveAuthUrl(GOOGLE_AUTH_EXCHANGE_PATH);
-
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetch(GOOGLE_AUTH_EXCHANGE_PATH, {
       method: 'POST',
       cache: 'no-store',
-      credentials: 'omit',
+      credentials: 'same-origin',
       headers: {
         accept: 'application/json',
         'content-type': 'application/json',
@@ -659,7 +564,7 @@ export async function exchangeGoogleCredential(
     });
   } catch (error) {
     throw new AuthClientError(
-      `Could not reach Google auth exchange API at ${url}.`,
+      'Could not reach Google auth exchange API.',
       0,
       error,
     );
@@ -680,6 +585,48 @@ export async function exchangeGoogleCredential(
   return authState;
 }
 
+export async function getCurrentAuthSession() {
+  const response = await fetch(AUTH_SESSION_PATH, {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'same-origin',
+    headers: {
+      accept: 'application/json',
+    },
+  }).catch(() => null);
+
+  if (!response?.ok) {
+    return getStoredAuth({ notifyOnInvalid: false });
+  }
+
+  const body = (await response.json().catch(() => null)) as unknown;
+  const record = readObject(body);
+  const payload = readObject(record?.data);
+
+  if (!payload || payload.authenticated !== true) {
+    clearStoredAuth({ notify: false });
+    return null;
+  }
+
+  const authState = normalizeGoogleAuthResponse({
+    ok: true,
+    data: {
+      user: payload.user,
+      tokenType: payload.tokenType,
+      accessTokenExpiresAt: payload.accessTokenExpiresAt,
+    },
+  });
+
+  persistAuthState(authState, { notify: false });
+
+  return authState;
+}
+
 export async function signOut() {
+  await fetch(AUTH_LOGOUT_PATH, {
+    method: 'POST',
+    cache: 'no-store',
+    credentials: 'same-origin',
+  }).catch(() => null);
   clearStoredAuth();
 }

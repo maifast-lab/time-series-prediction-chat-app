@@ -45,9 +45,8 @@ Use `.env.example` as the source of truth for required variables:
 
 - `NEXT_PUBLIC_SITE_URL`: public frontend origin.
 - `NEXT_PUBLIC_GOOGLE_CLIENT_ID`: browser Google OAuth client ID.
-- `NEXT_PUBLIC_BACKEND_URL`: Admin API base URL.
-- `NEXT_PUBLIC_AUTH_GOOGLE_EXCHANGE_PATH`: Google credential exchange path on the Admin API.
-- `NEXT_PUBLIC_PYTHON_BACKEND_URL`: Python cleaner API base URL.
+- `NEXT_PUBLIC_BACKEND_URL`: Admin API base URL used by the server-side proxy.
+- `PYTHON_BACKEND_URL`: server-only Python cleaner API base URL.
 
 Do not commit local `.env` or `.env.local` files.
 
@@ -63,7 +62,7 @@ type ApiEnvelope<T> =
   | { ok: false; error: string };
 ```
 
-The frontend sends stored bearer tokens to the Admin API with the `Authorization` header. The Admin API must allow the public frontend origin through CORS.
+The browser calls same-origin `/api/*` routes. Those route handlers keep the bearer token in httpOnly cookies and forward authorized requests to the Admin API.
 
 ## Scripts
 
@@ -76,7 +75,7 @@ pnpm lint     # Run ESLint
 
 ## Deployment
 
-Deploy this app as the public `www` frontend. Configure production environment variables to point at the production Admin API, production Python cleaner API, production site URL, and production Google OAuth client.
+Deploy this app as the public `www` frontend. Configure production environment variables to point at the production Admin API, server-only Python cleaner API, production site URL, and production Google OAuth client.
 
 The Admin API deployment must allow the public origin in CORS and must keep the response envelope stable. If the Admin API route namespace changes, update `src/lib/api-hooks.ts`, `src/components/sheet-editor/sheet-editor-api.ts`, and `docs/api-contract.md` together.
 

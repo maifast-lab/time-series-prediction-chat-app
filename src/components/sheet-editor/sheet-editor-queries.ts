@@ -41,7 +41,6 @@ interface SheetDataStatus {
 
 interface UploadDataSourceInput {
   file: File;
-  userId: string;
   onCleaned?: () => void;
 }
 
@@ -135,10 +134,9 @@ export function useUploadDataSourceMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ file, userId, onCleaned }: UploadDataSourceInput) => {
+    mutationFn: async ({ file, onCleaned }: UploadDataSourceInput) => {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('user_id', userId);
 
       const cleanedData = await cleanUploadedData(formData);
       onCleaned?.();

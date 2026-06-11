@@ -14,19 +14,19 @@ import {
 import { Separator } from '@/components/ui/separator';
 import {
   AuthClientError,
-  clearStoredAuth,
   decodeGoogleCredential,
   exchangeGoogleCredential,
+  getCurrentAuthSession,
   getGoogleClientId,
-  getStoredAuth,
   loadGoogleIdentityScript,
+  signOut,
 } from '@/lib/auth-client';
 import { ApiClientError } from '@/lib/api-client';
 import { useCreateChatMutation, useLatestChatQuery } from '@/lib/api-hooks';
 export default function LoginPage() {
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const ImageLogo = "/PNG.png";
-  const [hasStoredAuth] = useState(() => Boolean(getStoredAuth()));
+  const [hasStoredAuth, setHasStoredAuth] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [googleReady, setGoogleReady] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
@@ -73,10 +73,28 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
-    if (!hasStoredAuth) {
-      setCheckingAuth(false);
+    let isMounted = true;
+
+    async function checkExistingSession() {
+      const authSession = await getCurrentAuthSession();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (authSession) {
+        setHasStoredAuth(true);
+      } else {
+        setCheckingAuth(false);
+      }
     }
-  }, [hasStoredAuth]);
+
+    void checkExistingSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!hasStoredAuth) {
@@ -90,7 +108,7 @@ export default function LoginPage() {
 
     if (latestChatQuery.isError) {
       if (latestChatQuery.error instanceof ApiClientError && latestChatQuery.error.status === 401) {
-        clearStoredAuth();
+        void signOut();
       } else {
         setAuthError('Could not validate saved login.');
       }
