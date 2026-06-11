@@ -60,12 +60,15 @@ interface GoogleAuthResponse {
   ok?: boolean;
   message?: string;
   error?: string;
+  data?: unknown;
   user?: unknown;
   tokenType?: unknown;
   accessToken?: unknown;
   refreshToken?: unknown;
   accessTokenExpiresIn?: unknown;
   refreshTokenExpiresIn?: unknown;
+  accessTokenExpiresAt?: unknown;
+  refreshTokenExpiresAt?: unknown;
 }
 
 declare global {
@@ -166,6 +169,20 @@ function ttlToExpiresAt(value: unknown) {
   }
 
   return Date.now() + seconds * 1000;
+}
+
+function normalizeAbsoluteExpiresAt(value: unknown) {
+  const timestamp = pickNumber(value);
+
+  if (timestamp === null || timestamp <= 0) {
+    return null;
+  }
+
+  return timestamp > 10_000_000_000 ? timestamp : timestamp * 1000;
+}
+
+function normalizeExpiresAt(ttlValue: unknown, absoluteValue: unknown) {
+  return normalizeAbsoluteExpiresAt(absoluteValue) ?? ttlToExpiresAt(ttlValue);
 }
 
 function normalizeTokenType(value: unknown) {
@@ -271,22 +288,36 @@ function normalizeGoogleAuthResponse(body: unknown) {
     );
   }
 
-  const accessToken = pickString(record.accessToken);
+  const payload =
+    (readObject(record.data) as GoogleAuthResponse | null) ?? record;
+  const accessToken = pickString(payload.accessToken);
 
   if (!accessToken) {
     throw new AuthClientError(
-      readErrorMessage(record, 'Google sign-in did not return an access token.'),
+      readErrorMessage(
+        payload,
+        readErrorMessage(
+          record,
+          'Google sign-in did not return an access token.',
+        ),
+      ),
       500,
     );
   }
 
   return {
-    user: normalizeAuthUser(record.user),
-    tokenType: normalizeTokenType(record.tokenType),
+    user: normalizeAuthUser(payload.user),
+    tokenType: normalizeTokenType(payload.tokenType),
     accessToken,
-    refreshToken: pickString(record.refreshToken),
-    accessTokenExpiresAt: ttlToExpiresAt(record.accessTokenExpiresIn),
-    refreshTokenExpiresAt: ttlToExpiresAt(record.refreshTokenExpiresIn),
+    refreshToken: pickString(payload.refreshToken),
+    accessTokenExpiresAt: normalizeExpiresAt(
+      payload.accessTokenExpiresIn,
+      payload.accessTokenExpiresAt,
+    ),
+    refreshTokenExpiresAt: normalizeExpiresAt(
+      payload.refreshTokenExpiresIn,
+      payload.refreshTokenExpiresAt,
+    ),
   } satisfies StoredAuthState;
 }
 
