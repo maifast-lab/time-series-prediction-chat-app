@@ -33,6 +33,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
   return (
     <MainLayout initialChats={chatsResponse.chats}>
       <ChatPageClient
+        key={chatPageData.chat._id}
         initialChat={chatPageData.chat}
         initialMessages={chatPageData.messages}
         initialHasUploadedData={chatPageData.hasUploadedData}

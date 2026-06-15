@@ -20,20 +20,13 @@ export default function ChatHeader({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setDraftName(chat.company);
-  }, [chat.company]);
-
-  useEffect(() => {
-    if (!isEditing) {
-      setRenameError('');
-      return;
+    if (isEditing) {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(
+        inputRef.current.value.length,
+        inputRef.current.value.length,
+      );
     }
-
-    inputRef.current?.focus();
-    inputRef.current?.setSelectionRange(
-      inputRef.current.value.length,
-      inputRef.current.value.length,
-    );
   }, [isEditing]);
 
   function startRename() {
@@ -59,12 +52,14 @@ export default function ChatHeader({
 
     if (nextName === chat.company) {
       setIsEditing(false);
+      setRenameError('');
       return;
     }
 
     try {
       await onRename(nextName);
       setIsEditing(false);
+      setRenameError('');
     } catch {
       setRenameError('Unable to rename chat right now.');
     }

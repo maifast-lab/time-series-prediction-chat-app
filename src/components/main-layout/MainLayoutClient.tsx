@@ -164,7 +164,6 @@ export default function MainLayoutClient({
 
     if (error instanceof ApiClientError && error.status === 401) {
       void signOut();
-      setAuthState(null);
       router.push('/login');
       return;
     }

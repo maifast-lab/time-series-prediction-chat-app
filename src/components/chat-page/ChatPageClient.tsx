@@ -37,8 +37,9 @@ export default function ChatPageClient({
   const router = useRouter();
   const [chat, setChat] = useState(initialChat);
   const [chatMessages, setChatMessages] = useState(initialMessages);
-  const [hasUploadedData, setHasUploadedData] = useState(initialHasUploadedData);
-  const [activeSheetDataName, setActiveSheetDataName] = useState(
+  const [localHasUploadedData, setLocalHasUploadedData] =
+    useState(initialHasUploadedData);
+  const [activeSheetDataName] = useState(
     initialActiveSheetDataName,
   );
   const [isResponding, setIsResponding] = useState(false);
@@ -48,20 +49,10 @@ export default function ChatPageClient({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetStatusQuery = useSheetDataStatus(true);
+  const hasUploadedData =
+    sheetStatusQuery.data?.hasSheetData ?? localHasUploadedData;
   const sendMessageMutation = useSendChatMessageMutation(chat._id);
   const renameChatMutation = useRenameChatMutation(chat._id);
-
-  useEffect(() => {
-    setChat(initialChat);
-    setChatMessages(initialMessages);
-    setHasUploadedData(initialHasUploadedData);
-    setActiveSheetDataName(initialActiveSheetDataName);
-  }, [
-    initialActiveSheetDataName,
-    initialChat,
-    initialHasUploadedData,
-    initialMessages,
-  ]);
 
   useEffect(() => {
     if (!isResponding) {
@@ -95,19 +86,13 @@ export default function ChatPageClient({
   useEffect(() => {
     function handleDataUpload() {
       setComposerNotice('');
-      setHasUploadedData(true);
+      setLocalHasUploadedData(true);
     }
 
     window.addEventListener(DATA_SOURCE_UPLOADED_EVENT, handleDataUpload);
     return () =>
       window.removeEventListener(DATA_SOURCE_UPLOADED_EVENT, handleDataUpload);
   }, []);
-
-  useEffect(() => {
-    if (sheetStatusQuery.data) {
-      setHasUploadedData(sheetStatusQuery.data.hasSheetData);
-    }
-  }, [sheetStatusQuery.data]);
 
   async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -221,7 +206,6 @@ export default function ChatPageClient({
       />
       <ChatMessagesPane
         messages={chatMessages}
-        hasUploadedData={hasUploadedData}
         isResponding={isResponding}
         messagesEndRef={messagesEndRef}
       />
