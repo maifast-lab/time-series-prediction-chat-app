@@ -6,6 +6,7 @@ import { requestApi } from '@/lib/api-client';
 import type {
   ChatSummary,
   ChatsOverviewData,
+  JobStatusResult,
   LatestChatLookupResponse,
   SendChatMessageResult,
 } from '@/lib/chat-types';
@@ -167,6 +168,10 @@ export function useSendChatMessageMutation(chatId: string) {
         body: JSON.stringify({ text }),
       }),
   });
+}
+
+export function fetchJobStatus(jobId: string) {
+  return requestApi<JobStatusResult>(`/api/job-status/${encodeURIComponent(jobId)}`);
 }
 
 export function useSubmitSuggestionMutation() {

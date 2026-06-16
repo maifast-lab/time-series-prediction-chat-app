@@ -8,7 +8,11 @@ import ChatHeader from '@/components/chat-page/ChatHeader';
 import ChatMessagesPane from '@/components/chat-page/ChatMessagesPane';
 import { useSheetDataStatus } from '@/components/sheet-editor/sheet-editor-queries';
 import { ApiClientError } from '@/lib/api-client';
-import { useRenameChatMutation, useSendChatMessageMutation } from '@/lib/api-hooks';
+import {
+  fetchJobStatus,
+  useRenameChatMutation,
+  useSendChatMessageMutation,
+} from '@/lib/api-hooks';
 import { clearStoredAuth } from '@/lib/auth-client';
 import {
   CHAT_RENAMED_EVENT,
@@ -53,6 +57,10 @@ export default function ChatPageClient({
     sheetStatusQuery.data?.hasSheetData ?? localHasUploadedData;
   const sendMessageMutation = useSendChatMessageMutation(chat._id);
   const renameChatMutation = useRenameChatMutation(chat._id);
+  const pendingJobIds = chatMessages
+    .filter((message) => message.jobId && message.isLoading)
+    .map((message) => message.jobId as string);
+  const pendingJobKey = pendingJobIds.join('|');
 
   useEffect(() => {
     if (!isResponding) {
@@ -63,6 +71,57 @@ export default function ChatPageClient({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isResponding]);
+
+  useEffect(() => {
+    const jobIds = pendingJobKey ? pendingJobKey.split('|').filter(Boolean) : [];
+
+    if (jobIds.length === 0) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function pollJobs() {
+      await Promise.all(
+        jobIds.map(async (jobId) => {
+          try {
+            const result = await fetchJobStatus(jobId);
+
+            if (!isActive) {
+              return;
+            }
+
+            setChatMessages((current) =>
+              current.map((message) =>
+                message.jobId === result.jobId ? result.message : message,
+              ),
+            );
+          } catch (error) {
+            if (error instanceof ApiClientError && error.status === 401) {
+              clearStoredAuth();
+              router.push('/login');
+              return;
+            }
+
+            logger.warn('Job status polling failed', {
+              jobId,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+          }
+        }),
+      );
+    }
+
+    void pollJobs();
+    const intervalId = window.setInterval(() => {
+      void pollJobs();
+    }, 2500);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [pendingJobKey, router]);
 
   useEffect(() => {
     function handleChatRenamed(event: Event) {
