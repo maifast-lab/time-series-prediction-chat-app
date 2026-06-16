@@ -32,6 +32,7 @@ import { ApiClientError } from '@/lib/api-client';
 import { clearStoredAuth } from '@/lib/auth-client';
 
 const EMPTY_ROWS: DataSourceRecord[] = [];
+const EMPTY_NUMBERS: number[] = [];
 const YEAR_MODE_LIMIT = 5000;
 
 function dedupeAndSortNumbers(values: number[], descending: boolean) {
@@ -97,13 +98,11 @@ export function useSheetEditor() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] =
     useState<FilterState>(DEFAULT_FILTERS);
-  const [availableYears, setAvailableYears] = useState<number[]>([]);
-  const [availableMonths, setAvailableMonths] = useState<number[]>([]);
   const [draftRows, setDraftRows] = useState<Record<string, RowDraft>>({});
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [newRowDraft, setNewRowDraft] = useState<RowDraft>({});
   const [savingRowKey, setSavingRowKey] = useState<string | null>(null);
-  const [filterError, setFilterError] = useState('');
+  const filterError = useMemo(() => validateFilters(filters), [filters]);
   const dataSourcesQuery = useDataSourcesQuery(appliedFilters, !filterError);
   const allYearsQueryFilters = useMemo(
     () => ({
@@ -125,8 +124,10 @@ export function useSheetEditor() {
   const metadata = dataSourcesQuery.data?.metadata ?? EMPTY_METADATA;
   const metadataAvailableYears = metadata.availableYears;
   const metadataAvailableMonths = metadata.availableMonths;
-  const catalogAvailableYears = allYearsQuery.data?.metadata.availableYears ?? [];
-  const catalogAvailableMonths = allYearsQuery.data?.metadata.availableMonths ?? [];
+  const catalogAvailableYears =
+    allYearsQuery.data?.metadata.availableYears ?? EMPTY_NUMBERS;
+  const catalogAvailableMonths =
+    allYearsQuery.data?.metadata.availableMonths ?? EMPTY_NUMBERS;
 
   const isLoading =
     !filterError && (dataSourcesQuery.isLoading || dataSourcesQuery.isFetching);
@@ -158,7 +159,7 @@ export function useSheetEditor() {
     ([key, value]) => key.toLowerCase() !== 'date' && value.trim(),
   );
 
-  useEffect(() => {
+  const availableFilters = useMemo(() => {
     const fallback = extractFilterValuesFromRows(rows);
     const nextYears =
       catalogAvailableYears.length > 0
@@ -182,35 +183,19 @@ export function useSheetEditor() {
       false,
     );
 
-    setAvailableYears((currentYears) => {
-      if (
-        currentYears.length === nextYearsDeduped.length &&
-        currentYears.every((year, index) => year === nextYearsDeduped[index])
-      ) {
-        return currentYears;
-      }
-
-      return nextYearsDeduped;
-    });
-
-    setAvailableMonths((currentMonths) => {
-      if (
-        currentMonths.length === nextMonthsDeduped.length &&
-        currentMonths.every((month, index) => month === nextMonthsDeduped[index])
-      ) {
-        return currentMonths;
-      }
-
-      return nextMonthsDeduped;
-    });
+    return {
+      years: nextYearsDeduped,
+      months: nextMonthsDeduped,
+    };
   }, [
-    dataSourcesQuery.data,
     rows,
     metadataAvailableMonths,
     metadataAvailableYears,
     catalogAvailableMonths,
     catalogAvailableYears,
   ]);
+  const availableYears = availableFilters.years;
+  const availableMonths = availableFilters.months;
 
   useEffect(() => {
     if (filterError) {
@@ -254,16 +239,16 @@ export function useSheetEditor() {
     }
 
     if (shouldSync) {
-      setFilters(nextFilters);
+      const timeoutId = window.setTimeout(() => setFilters(nextFilters), 0);
+      return () => window.clearTimeout(timeoutId);
     }
   }, [availableYears, filterError, filters]);
 
   useEffect(() => {
-    const validationError = validateFilters(filters);
-    setFilterError(validationError);
-    if (validationError) {
+    if (filterError) {
       return;
     }
+
     const timeoutId = window.setTimeout(() => {
       setAppliedFilters((current) => {
         if (
@@ -282,14 +267,19 @@ export function useSheetEditor() {
       });
     }, 350);
     return () => window.clearTimeout(timeoutId);
-  }, [filters]);
+  }, [filterError, filters]);
 
   useEffect(() => {
     if (!dataSourcesQuery.data) {
       return;
     }
+
     const nextRows = dataSourcesQuery.data.rows;
-    setDraftRows(createDrafts(nextRows, getColumns(nextRows)));
+    const timeoutId = window.setTimeout(() => {
+      setDraftRows(createDrafts(nextRows, getColumns(nextRows)));
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [dataSourcesQuery.data]);
   useEffect(() => {
     const error = dataSourcesQuery.error;

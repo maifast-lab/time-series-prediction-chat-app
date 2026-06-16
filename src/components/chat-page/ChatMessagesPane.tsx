@@ -5,14 +5,12 @@ import type { ChatMessage } from "@/lib/chat-types";
 
 interface ChatMessagesPaneProps {
   messages: ChatMessage[];
-  hasUploadedData: boolean;
   isResponding: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export default function ChatMessagesPane({
   messages,
-  hasUploadedData,
   isResponding,
   messagesEndRef,
 }: ChatMessagesPaneProps) {

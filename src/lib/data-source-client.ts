@@ -1,7 +1,3 @@
-const PYTHON_API_BASE_URL =
-  process.env.NEXT_PUBLIC_PYTHON_BACKEND_URL?.trim() ||
-  'http://127.0.0.1:8000/api/';
-
 interface CleanDataResponse {
   cleanedData?: unknown;
   cleaned_data?: unknown;
@@ -14,13 +10,6 @@ interface CleanDataResponse {
 interface DataSourceRequest {
   body: BodyInit;
   headers?: HeadersInit;
-}
-
-function resolvePythonApiUrl(path: string) {
-  const normalizedBase = PYTHON_API_BASE_URL.replace(/\/+$/, '');
-  const normalizedPath = path.replace(/^\/+/, '');
-
-  return new URL(normalizedPath, `${normalizedBase}/`).toString();
 }
 
 export function createDataSourceRequest(cleanedData: unknown): DataSourceRequest {
@@ -39,7 +28,10 @@ export function createDataSourceRequest(cleanedData: unknown): DataSourceRequest
     };
   }
 
-  const jsonBody = JSON.stringify(cleanedData);
+  const payload = Array.isArray(cleanedData)
+    ? { data: cleanedData }
+    : cleanedData;
+  const jsonBody = JSON.stringify(payload);
 
   if (jsonBody === undefined) {
     throw new Error('Data conversion failed: cleaned data is not serializable.');
@@ -54,8 +46,9 @@ export function createDataSourceRequest(cleanedData: unknown): DataSourceRequest
 }
 
 export async function cleanUploadedData(formData: FormData) {
-  const response = await fetch(resolvePythonApiUrl('v1/clean_data'), {
+  const response = await fetch('/api/clean-data', {
     method: 'POST',
+    credentials: 'same-origin',
     body: formData,
   });
   const result = (await response.json().catch(() => null)) as

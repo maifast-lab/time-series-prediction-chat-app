@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -30,6 +31,12 @@ export default function ChatMessageItem({ message }: ChatMessageItemProps) {
             : 'rounded-tl-none border border-slate-200 bg-white/75 text-slate-800 shadow-sm shadow-slate-200/50 dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:shadow-none',
         )}
       >
+        {message.isLoading ? (
+          <div className='mb-3 flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-300'>
+            <Loader2 className='h-3.5 w-3.5 animate-spin' />
+            <span>{message.status === 'queued' ? 'Queued...' : 'Processing...'}</span>
+          </div>
+        ) : null}
         <div className='prose prose-p:leading-relaxed prose-pre:p-0 max-w-none break-words'>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}

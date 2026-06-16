@@ -46,8 +46,8 @@ export default function NewEntryDialog({
 }: NewEntryDialogProps) {
   const editableColumns = columns.filter((column) => !isDateColumn(column));
 
-  const fillEntryCellsFromPaste = (values: string[], _startColumn: string) => {
-    const startIndex = editableColumns.length > 0 ? 0 : -1;
+  const fillEntryCellsFromPaste = (values: string[], startColumn: string) => {
+    const startIndex = editableColumns.indexOf(startColumn);
     if (startIndex < 0) {
       return;
     }

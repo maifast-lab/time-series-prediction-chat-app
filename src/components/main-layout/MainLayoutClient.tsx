@@ -39,8 +39,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   AUTH_STATE_CHANGED_EVENT,
-  clearStoredAuth,
-  getStoredAuth,
+  getCurrentAuthSession,
   signOut,
   type StoredAuthState,
 } from '@/lib/auth-client';
@@ -124,8 +123,16 @@ export default function MainLayoutClient({
   }, [initialChats, queryClient]);
 
   useEffect(() => {
-    function syncAuthState() {
-      setAuthState(getStoredAuth());
+    let isMounted = true;
+
+    async function syncAuthState() {
+      const nextAuthState = await getCurrentAuthSession();
+
+      if (!isMounted) {
+        return;
+      }
+
+      setAuthState(nextAuthState);
       setIsAuthLoading(false);
     }
 
@@ -142,6 +149,7 @@ export default function MainLayoutClient({
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, syncAuthState);
 
     return () => {
+      isMounted = false;
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener(AUTH_STATE_CHANGED_EVENT, syncAuthState);
     };
@@ -155,8 +163,7 @@ export default function MainLayoutClient({
     }
 
     if (error instanceof ApiClientError && error.status === 401) {
-      clearStoredAuth();
-      setAuthState(null);
+      void signOut();
       router.push('/login');
       return;
     }
@@ -174,7 +181,7 @@ export default function MainLayoutClient({
 
   function redirectToLoginIfUnauthorized(error: unknown) {
     if (error instanceof ApiClientError && error.status === 401) {
-      clearStoredAuth();
+      void signOut();
       setAuthState(null);
       router.push('/login');
       return true;
@@ -411,7 +418,6 @@ export default function MainLayoutClient({
     try {
       await uploadDataSourceMutation.mutateAsync({
         file,
-        userId: authState.user.id,
         onCleaned: () => {
           setUploadStep('processing');
           setProgressMessage('Data cleaned successfully. Finalizing upload...');

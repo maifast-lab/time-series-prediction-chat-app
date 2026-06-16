@@ -16,13 +16,16 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   createdAt: string;
+  jobId?: string | null;
+  isLoading?: boolean;
+  status?: 'queued' | 'processing' | 'completed' | 'failed' | null;
 }
 
 export interface ChatPageData {
   chat: ChatDetails;
   messages: ChatMessage[];
   hasUploadedData: boolean;
-  activeDataSourceName: string;
+  activeSheetDataName: string;
 }
 
 export interface ChatsOverviewData {
@@ -33,6 +36,15 @@ export interface ChatsOverviewData {
 export interface SendChatMessageResult {
   message: ChatMessage;
   chatTitle: string | null;
+  jobId?: string | null;
+  status?: 'queued' | 'processing' | 'completed' | 'failed' | null;
+}
+
+export interface JobStatusResult {
+  jobId: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  error?: string;
+  message: ChatMessage;
 }
 
 export interface LatestChatLookupResponse {

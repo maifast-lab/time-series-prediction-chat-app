@@ -1,6 +1,4 @@
 import type { ApiEnvelope } from '@/lib/api-response';
-import { resolveApiUrl } from '@/lib/api-base-url';
-import { getStoredAuthorizationHeader } from '@/lib/auth-client';
 
 export class ApiClientError extends Error {
   constructor(
@@ -15,17 +13,12 @@ export class ApiClientError extends Error {
 
 export async function requestApi<T>(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
-  const authorizationHeader = getStoredAuthorizationHeader();
 
   if (!headers.has('accept')) {
     headers.set('accept', 'application/json');
   }
 
-  if (authorizationHeader && !headers.has('authorization')) {
-    headers.set('authorization', authorizationHeader);
-  }
-
-  const url = resolveApiUrl(path);
+  const url = path;
   let response: Response;
 
   try {
@@ -33,11 +26,11 @@ export async function requestApi<T>(path: string, init?: RequestInit) {
       ...init,
       headers,
       cache: 'no-store',
-      credentials: 'omit',
+      credentials: 'same-origin',
     });
   } catch (error) {
     throw new ApiClientError(
-      `Could not reach API at ${url}. Check that the backend is running and CORS allows this frontend origin.`,
+      `Could not reach API at ${url}. Check that the application server is running.`,
       0,
       error,
     );

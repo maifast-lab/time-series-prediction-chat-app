@@ -6,7 +6,7 @@ interface ChatComposerProps {
   inputText: string;
   hasUploadedData: boolean;
   isResponding: boolean;
-  activeDataSourceName: string;
+  activeSheetDataName: string;
   composerNotice: string;
   onInputChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -15,10 +15,10 @@ interface ChatComposerProps {
 function getComposerHelperText({
   composerNotice,
   hasUploadedData,
-  activeDataSourceName,
+  activeSheetDataName,
 }: Pick<
   ChatComposerProps,
-  'composerNotice' | 'hasUploadedData' | 'activeDataSourceName'
+  'composerNotice' | 'hasUploadedData' | 'activeSheetDataName'
 >) {
   if (composerNotice) {
     return composerNotice;
@@ -28,8 +28,8 @@ function getComposerHelperText({
     return 'No sheet uploaded. Ask me anything, and upload CSV/Excel anytime for spreadsheet-based answers.';
   }
 
-  if (activeDataSourceName) {
-    return `Active Excel: ${activeDataSourceName}. Uploaded sheet ke basis par jawab diya jayega.`;
+  if (activeSheetDataName) {
+    return `Active sheet: ${activeSheetDataName}. Uploaded sheet ke basis par jawab diya jayega.`;
   }
 
   return 'Uploaded sheet ke basis par jawab diya jayega.';
@@ -40,7 +40,7 @@ export default function ChatComposer({
   inputText,
   hasUploadedData,
   isResponding,
-  activeDataSourceName,
+  activeSheetDataName,
   composerNotice,
   onInputChange,
   onSubmit,
@@ -74,7 +74,7 @@ export default function ChatComposer({
         {getComposerHelperText({
           composerNotice,
           hasUploadedData,
-          activeDataSourceName,
+          activeSheetDataName,
         })}
       </p>
       <p className='mx-auto mt-3 max-w-4xl px-1 text-center text-xs text-slate-500 dark:text-gray-500'>

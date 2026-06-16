@@ -8,7 +8,11 @@ import ChatHeader from '@/components/chat-page/ChatHeader';
 import ChatMessagesPane from '@/components/chat-page/ChatMessagesPane';
 import { useSheetDataStatus } from '@/components/sheet-editor/sheet-editor-queries';
 import { ApiClientError } from '@/lib/api-client';
-import { useRenameChatMutation, useSendChatMessageMutation } from '@/lib/api-hooks';
+import {
+  fetchJobStatus,
+  useRenameChatMutation,
+  useSendChatMessageMutation,
+} from '@/lib/api-hooks';
 import { clearStoredAuth } from '@/lib/auth-client';
 import {
   CHAT_RENAMED_EVENT,
@@ -25,21 +29,22 @@ interface ChatPageClientProps {
   initialChat: ChatPageData['chat'];
   initialMessages: ChatPageData['messages'];
   initialHasUploadedData: ChatPageData['hasUploadedData'];
-  initialActiveDataSourceName: ChatPageData['activeDataSourceName'];
+  initialActiveSheetDataName: ChatPageData['activeSheetDataName'];
 }
 
 export default function ChatPageClient({
   initialChat,
   initialMessages,
   initialHasUploadedData,
-  initialActiveDataSourceName,
+  initialActiveSheetDataName,
 }: ChatPageClientProps) {
   const router = useRouter();
   const [chat, setChat] = useState(initialChat);
   const [chatMessages, setChatMessages] = useState(initialMessages);
-  const [hasUploadedData, setHasUploadedData] = useState(initialHasUploadedData);
-  const [activeDataSourceName, setActiveDataSourceName] = useState(
-    initialActiveDataSourceName,
+  const [localHasUploadedData, setLocalHasUploadedData] =
+    useState(initialHasUploadedData);
+  const [activeSheetDataName] = useState(
+    initialActiveSheetDataName,
   );
   const [isResponding, setIsResponding] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -48,20 +53,14 @@ export default function ChatPageClient({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetStatusQuery = useSheetDataStatus(true);
+  const hasUploadedData =
+    sheetStatusQuery.data?.hasSheetData ?? localHasUploadedData;
   const sendMessageMutation = useSendChatMessageMutation(chat._id);
   const renameChatMutation = useRenameChatMutation(chat._id);
-
-  useEffect(() => {
-    setChat(initialChat);
-    setChatMessages(initialMessages);
-    setHasUploadedData(initialHasUploadedData);
-    setActiveDataSourceName(initialActiveDataSourceName);
-  }, [
-    initialActiveDataSourceName,
-    initialChat,
-    initialHasUploadedData,
-    initialMessages,
-  ]);
+  const pendingJobIds = chatMessages
+    .filter((message) => message.jobId && message.isLoading)
+    .map((message) => message.jobId as string);
+  const pendingJobKey = pendingJobIds.join('|');
 
   useEffect(() => {
     if (!isResponding) {
@@ -72,6 +71,57 @@ export default function ChatPageClient({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isResponding]);
+
+  useEffect(() => {
+    const jobIds = pendingJobKey ? pendingJobKey.split('|').filter(Boolean) : [];
+
+    if (jobIds.length === 0) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function pollJobs() {
+      await Promise.all(
+        jobIds.map(async (jobId) => {
+          try {
+            const result = await fetchJobStatus(jobId);
+
+            if (!isActive) {
+              return;
+            }
+
+            setChatMessages((current) =>
+              current.map((message) =>
+                message.jobId === result.jobId ? result.message : message,
+              ),
+            );
+          } catch (error) {
+            if (error instanceof ApiClientError && error.status === 401) {
+              clearStoredAuth();
+              router.push('/login');
+              return;
+            }
+
+            logger.warn('Job status polling failed', {
+              jobId,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+          }
+        }),
+      );
+    }
+
+    void pollJobs();
+    const intervalId = window.setInterval(() => {
+      void pollJobs();
+    }, 2500);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [pendingJobKey, router]);
 
   useEffect(() => {
     function handleChatRenamed(event: Event) {
@@ -95,19 +145,13 @@ export default function ChatPageClient({
   useEffect(() => {
     function handleDataUpload() {
       setComposerNotice('');
-      setHasUploadedData(true);
+      setLocalHasUploadedData(true);
     }
 
     window.addEventListener(DATA_SOURCE_UPLOADED_EVENT, handleDataUpload);
     return () =>
       window.removeEventListener(DATA_SOURCE_UPLOADED_EVENT, handleDataUpload);
   }, []);
-
-  useEffect(() => {
-    if (sheetStatusQuery.data) {
-      setHasUploadedData(sheetStatusQuery.data.hasSheetData);
-    }
-  }, [sheetStatusQuery.data]);
 
   async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -221,7 +265,6 @@ export default function ChatPageClient({
       />
       <ChatMessagesPane
         messages={chatMessages}
-        hasUploadedData={hasUploadedData}
         isResponding={isResponding}
         messagesEndRef={messagesEndRef}
       />
@@ -230,7 +273,7 @@ export default function ChatPageClient({
         inputText={inputText}
         hasUploadedData={hasUploadedData}
         isResponding={isResponding}
-        activeDataSourceName={activeDataSourceName}
+        activeSheetDataName={activeSheetDataName}
         composerNotice={composerNotice}
         onInputChange={setInputText}
         onSubmit={handleSendMessage}
