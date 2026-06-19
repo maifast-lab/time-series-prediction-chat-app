@@ -226,7 +226,7 @@ function normalizeAuthUser(user: unknown): AuthUser | null {
   }
 
   const normalized: AuthUser = {
-    id: pickString(record.id, record._id, record.sub),
+    id: pickString(record.id, record._id, record.sub, record.userId, record.googleId),
     name: pickString(record.name, record.fullName, record.displayName),
     email: pickString(record.email),
     image: pickString(

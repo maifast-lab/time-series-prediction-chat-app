@@ -81,7 +81,7 @@ export default function MainLayoutClient({
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const chatsQuery = useChatsOverviewQuery({ initialChats });
-  const sheetStatusQuery = useSheetDataStatus(Boolean(authState?.user?.id));
+  const sheetStatusQuery = useSheetDataStatus(Boolean(authState));
   const createChatMutation = useCreateChatMutation();
   const deleteChatMutation = useDeleteChatMutation();
   const renameChatMutation = useRenameChatByIdMutation();
@@ -92,7 +92,7 @@ export default function MainLayoutClient({
   const chats = chatsQuery.data?.chats ?? initialChats;
   const hasSheetData = Boolean(sheetStatusQuery.data?.hasSheetData);
   const isCheckingSheetData =
-    Boolean(authState?.user?.id) &&
+    Boolean(authState) &&
     !sheetStatusQuery.data &&
     sheetStatusQuery.isLoading;
 

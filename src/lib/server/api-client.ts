@@ -2,11 +2,13 @@ import { getAuthorizationHeaderValue } from '@/lib/auth-client';
 import { resolveApiUrl } from '@/lib/api-base-url';
 import type { ApiEnvelope } from '@/lib/api-response';
 import { getServerAuthState } from '@/lib/server/auth';
+import { fetchUpstream, UpstreamFetchError } from '@/lib/server/upstream-fetch';
 
 export class ServerApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly cause?: unknown,
   ) {
     super(message);
     this.name = 'ServerApiError';
@@ -25,11 +27,21 @@ async function requestServerResponse(path: string, init?: RequestInit) {
     outgoingHeaders.set('authorization', authorizationHeader);
   }
 
-  const response = await fetch(resolveApiUrl(path), {
-    ...init,
-    headers: outgoingHeaders,
-    cache: 'no-store',
-  });
+  let response: Response;
+
+  try {
+    response = await fetchUpstream(resolveApiUrl(path), {
+      ...init,
+      headers: outgoingHeaders,
+      cache: 'no-store',
+    });
+  } catch (error) {
+    if (error instanceof UpstreamFetchError) {
+      throw new ServerApiError(error.message, 502, error);
+    }
+
+    throw error;
+  }
 
   return response;
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getServerAuthState } from '@/lib/server/auth';
+import { fetchUpstream, UpstreamFetchError } from '@/lib/server/upstream-fetch';
 
 const PYTHON_API_BASE_URL =
   process.env.PYTHON_BACKEND_URL?.trim() ||
@@ -43,11 +44,22 @@ export async function POST(request: Request) {
   formData.append('file', file, file.name);
   formData.append('user_id', userId);
 
-  const upstreamResponse = await fetch(resolvePythonApiUrl('v1/clean_data'), {
-    method: 'POST',
-    body: formData,
-    cache: 'no-store',
-  });
+  let upstreamResponse: Response;
+
+  try {
+    upstreamResponse = await fetchUpstream(resolvePythonApiUrl('v1/clean_data'), {
+      method: 'POST',
+      body: formData,
+      cache: 'no-store',
+    });
+  } catch (error) {
+    if (error instanceof UpstreamFetchError) {
+      return jsonError(error.message, 502);
+    }
+
+    throw error;
+  }
+
   const body = await upstreamResponse.text();
 
   return new NextResponse(body, {

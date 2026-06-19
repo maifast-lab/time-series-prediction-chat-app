@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { resolveApiUrl } from '@/lib/api-base-url';
 import { getAuthorizationHeaderValue } from '@/lib/auth-client';
 import { getServerAuthState } from '@/lib/server/auth';
+import { fetchUpstream, UpstreamFetchError } from '@/lib/server/upstream-fetch';
 
 interface ProxyRouteContext {
   params: Promise<{
@@ -52,6 +53,16 @@ function buildForwardHeaders(request: Request) {
   return headers;
 }
 
+function upstreamErrorResponse(error: UpstreamFetchError) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: error.message,
+    },
+    { status: 502 },
+  );
+}
+
 async function proxyRequest(request: Request, context: ProxyRouteContext) {
   const { path } = await context.params;
   const headers = buildForwardHeaders(request);
@@ -64,15 +75,26 @@ async function proxyRequest(request: Request, context: ProxyRouteContext) {
     headers.set('authorization', authorizationHeader);
   }
 
-  const upstreamResponse = await fetch(
-    resolveApiUrl(buildProxyPath(path, request.url)),
-    {
-      method,
-      headers,
-      body: hasBody ? await request.arrayBuffer() : undefined,
-      cache: 'no-store',
-    },
-  );
+  let upstreamResponse: Response;
+
+  try {
+    upstreamResponse = await fetchUpstream(
+      resolveApiUrl(buildProxyPath(path, request.url)),
+      {
+        method,
+        headers,
+        body: hasBody ? await request.arrayBuffer() : undefined,
+        cache: 'no-store',
+      },
+    );
+  } catch (error) {
+    if (error instanceof UpstreamFetchError) {
+      return upstreamErrorResponse(error);
+    }
+
+    throw error;
+  }
+
   const responseHeaders = new Headers();
 
   upstreamResponse.headers.forEach((value, key) => {

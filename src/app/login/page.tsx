@@ -165,6 +165,13 @@ export default function LoginPage() {
             try {
               const profile = decodeGoogleCredential(response.credential);
               await exchangeGoogleCredential(response.credential, profile);
+              const authSession = await getCurrentAuthSession();
+
+              if (!authSession) {
+                throw new AuthClientError('Could not validate login session.', 401);
+              }
+
+              setHasStoredAuth(true);
               await createChatAndRedirect();
             } catch (error) {
               setAuthError(
