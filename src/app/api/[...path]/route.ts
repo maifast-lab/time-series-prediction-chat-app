@@ -40,7 +40,8 @@ function buildForwardHeaders(request: Request) {
     if (
       !HOP_BY_HOP_HEADERS.has(normalizedKey) &&
       normalizedKey !== 'authorization' &&
-      normalizedKey !== 'cookie'
+      normalizedKey !== 'cookie' &&
+      normalizedKey !== 'accept-encoding'
     ) {
       headers.set(key, value);
     }
@@ -49,6 +50,8 @@ function buildForwardHeaders(request: Request) {
   if (!headers.has('accept')) {
     headers.set('accept', 'application/json');
   }
+
+  headers.set('accept-encoding', 'identity');
 
   return headers;
 }
@@ -102,7 +105,8 @@ async function proxyRequest(request: Request, context: ProxyRouteContext) {
 
     if (
       !HOP_BY_HOP_HEADERS.has(normalizedKey) &&
-      normalizedKey !== 'set-cookie'
+      normalizedKey !== 'set-cookie' &&
+      normalizedKey !== 'content-encoding'
     ) {
       responseHeaders.set(key, value);
     }

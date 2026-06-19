@@ -124,6 +124,7 @@ async function fetchOverHttp1(url: URL, init?: RequestInit) {
   const headers = new Headers(init?.headers);
 
   headers.set('connection', 'close');
+  headers.set('accept-encoding', 'identity');
 
   if (body && !headers.has('content-length')) {
     headers.set('content-length', String(body.byteLength));
