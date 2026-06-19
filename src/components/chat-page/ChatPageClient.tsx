@@ -7,7 +7,7 @@ import ChatComposer from '@/components/chat-page/ChatComposer';
 import ChatHeader from '@/components/chat-page/ChatHeader';
 import ChatMessagesPane from '@/components/chat-page/ChatMessagesPane';
 import { useSheetDataStatus } from '@/components/sheet-editor/sheet-editor-queries';
-import { ApiClientError } from '@/lib/api-client';
+import { ApiClientError, requestApi } from '@/lib/api-client';
 import {
   fetchJobStatus,
   useRenameChatMutation,
@@ -61,6 +61,9 @@ export default function ChatPageClient({
     .filter((message) => message.jobId && message.isLoading)
     .map((message) => message.jobId as string);
   const pendingJobKey = pendingJobIds.join('|');
+  const hasPendingSavedResponse = chatMessages.some(
+    (message) => message.isLoading && !message.jobId,
+  );
 
   useEffect(() => {
     if (!isResponding) {
@@ -122,6 +125,48 @@ export default function ChatPageClient({
       window.clearInterval(intervalId);
     };
   }, [pendingJobKey, router]);
+
+  useEffect(() => {
+    if (!hasPendingSavedResponse) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function refreshChatMessages() {
+      try {
+        const result = await requestApi<ChatPageData>(`/api/chats/${chat._id}`);
+
+        if (!isActive) {
+          return;
+        }
+
+        setChat(result.chat);
+        setChatMessages(result.messages);
+        setLocalHasUploadedData(result.hasUploadedData);
+      } catch (error) {
+        if (error instanceof ApiClientError && error.status === 401) {
+          clearStoredAuth();
+          router.push('/login');
+          return;
+        }
+
+        logger.warn('Pending response refresh failed', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    void refreshChatMessages();
+    const intervalId = window.setInterval(() => {
+      void refreshChatMessages();
+    }, 2500);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [chat._id, hasPendingSavedResponse, router]);
 
   useEffect(() => {
     function handleChatRenamed(event: Event) {

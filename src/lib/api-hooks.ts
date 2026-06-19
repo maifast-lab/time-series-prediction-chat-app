@@ -44,6 +44,10 @@ export function useCreateChatMutation() {
     mutationFn: () =>
       requestApi<ChatSummary>('/api/chats', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
       }),
     onSuccess: (chat) => {
       queryClient.setQueryData<ChatsOverviewData>(
