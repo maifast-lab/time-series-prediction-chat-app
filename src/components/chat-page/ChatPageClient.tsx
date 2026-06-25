@@ -23,6 +23,7 @@ import type {
   ChatPageData,
   ChatMessage,
 } from '@/lib/chat-types';
+import { formatChatDateRange } from '@/lib/chat-date-format';
 import { logger } from '@/lib/logger';
 
 interface ChatPageClientProps {
@@ -63,6 +64,9 @@ export default function ChatPageClient({
   const pendingJobKey = pendingJobIds.join('|');
   const hasPendingSavedResponse = chatMessages.some(
     (message) => message.isLoading && !message.jobId,
+  );
+  const chatDateRangeLabel = formatChatDateRange(
+    chatMessages.map((message) => message.createdAt),
   );
 
   useEffect(() => {
@@ -307,6 +311,7 @@ export default function ChatPageClient({
         chat={chat}
         onRename={handleRenameChat}
         isRenaming={renameChatMutation.isPending}
+        dateRangeLabel={chatDateRangeLabel}
       />
       <ChatMessagesPane
         messages={chatMessages}

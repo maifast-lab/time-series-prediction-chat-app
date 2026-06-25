@@ -6,12 +6,14 @@ import type { ChatPageData } from '@/lib/chat-types';
 interface ChatHeaderProps {
   chat: ChatPageData['chat'];
   isRenaming?: boolean;
+  dateRangeLabel?: string;
   onRename: (name: string) => Promise<void> | void;
 }
 
 export default function ChatHeader({
   chat,
   isRenaming = false,
+  dateRangeLabel = '',
   onRename,
 }: ChatHeaderProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -123,6 +125,11 @@ export default function ChatHeader({
           <span className='rounded bg-slate-200 px-2 py-0.5 text-xs dark:bg-white/5'>
             {chat.place}
           </span>
+          {dateRangeLabel ? (
+            <span className='text-xs font-medium text-slate-400 dark:text-gray-600'>
+              {dateRangeLabel}
+            </span>
+          ) : null}
         </div>
       </div>
     </header>

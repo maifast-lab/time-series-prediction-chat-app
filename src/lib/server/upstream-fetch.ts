@@ -48,15 +48,18 @@ function findErrorMessage(error: unknown): string {
   return 'fetch failed';
 }
 
-function isHttp2StreamError(error: unknown) {
+function isRetryableTransportError(error: unknown) {
   const code = findErrorCode(error);
   const message = findErrorMessage(error);
+  const normalizedMessage = message.toLowerCase();
 
   return (
     code === 'ERR_HTTP2_STREAM_ERROR' ||
+    code === 'UND_ERR_CONNECT_TIMEOUT' ||
     code?.startsWith('NGHTTP2_') ||
     message.includes('NGHTTP2_') ||
-    message.toLowerCase().includes('http2 stream')
+    normalizedMessage.includes('http2 stream') ||
+    normalizedMessage.includes('connect timeout')
   );
 }
 
@@ -193,7 +196,10 @@ export async function fetchUpstream(input: string | URL, init?: RequestInit) {
   try {
     return await fetch(url, init);
   } catch (error) {
-    if (isHttp2StreamError(error) && ['http:', 'https:'].includes(url.protocol)) {
+    if (
+      isRetryableTransportError(error) &&
+      ['http:', 'https:'].includes(url.protocol)
+    ) {
       try {
         return await fetchOverHttp1(url, init);
       } catch (fallbackError) {

@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-
 import { getServerAuthState } from '@/lib/server/auth';
 import { fetchUpstream, UpstreamFetchError } from '@/lib/server/upstream-fetch';
-
 const PYTHON_API_BASE_URL =
   process.env.PYTHON_BACKEND_URL?.trim() ||
   process.env.NEXT_PUBLIC_PYTHON_BACKEND_URL?.trim() ||
@@ -11,10 +9,8 @@ const PYTHON_API_BASE_URL =
 function resolvePythonApiUrl(path: string) {
   const normalizedBase = PYTHON_API_BASE_URL.replace(/\/+$/, '');
   const normalizedPath = path.replace(/^\/+/, '');
-
   return new URL(normalizedPath, `${normalizedBase}/`).toString();
 }
-
 function jsonError(message: string, status: number) {
   return NextResponse.json(
     {
@@ -45,11 +41,21 @@ export async function POST(request: Request) {
   formData.append('user_id', userId);
 
   let upstreamResponse: Response;
+  const upstreamUrl = resolvePythonApiUrl('v1/clean_data');
+
+  // Serialize multipart data once so the request body can be replayed by the
+  // HTTP/1.1 transport fallback after an Undici connection timeout.
+  const serializedRequest = new Request(upstreamUrl, {
+    method: 'POST',
+    body: formData,
+  });
+  const serializedBody = await serializedRequest.arrayBuffer();
 
   try {
-    upstreamResponse = await fetchUpstream(resolvePythonApiUrl('v1/clean_data'), {
+    upstreamResponse = await fetchUpstream(upstreamUrl, {
       method: 'POST',
-      body: formData,
+      headers: serializedRequest.headers,
+      body: serializedBody,
       cache: 'no-store',
     });
   } catch (error) {

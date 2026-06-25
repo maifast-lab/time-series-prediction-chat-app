@@ -1,9 +1,9 @@
-import { format } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { markdownComponents, normalizePatternMessageForDisplay } from '@/components/chat-page/markdown';
+import { formatMessageTimestamp } from '@/lib/chat-date-format';
 import type { ChatMessage } from '@/lib/chat-types';
 import { cn } from '@/lib/utils';
 
@@ -47,7 +47,7 @@ export default function ChatMessageItem({ message }: ChatMessageItemProps) {
         </div>
       </div>
       <div className='mt-1 px-2 text-[10px] text-slate-400 dark:text-gray-600'>
-        {format(new Date(message.createdAt), 'HH:mm')}
+        {formatMessageTimestamp(message.createdAt)}
       </div>
     </div>
   );

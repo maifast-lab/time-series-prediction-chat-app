@@ -1,6 +1,7 @@
 import { MessageSquare, PencilLine, Trash2 } from 'lucide-react';
 
 import type { ChatSummary } from '@/lib/chat-types';
+import { formatChatListDate } from '@/lib/chat-date-format';
 import { cn } from '@/lib/utils';
 
 interface SidebarChatListProps {
@@ -36,9 +37,12 @@ export default function SidebarChatList({
           onClick={() => onOpenChat(chat._id)}
         >
           <MessageSquare className='h-4 w-4 flex-shrink-0' />
-          <div className='flex flex-1 flex-col truncate'>
+          <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
             <span className='truncate font-medium'>
               {chat.company || 'New Chat'}
+            </span>
+            <span className='truncate text-[11px] font-medium text-slate-400 dark:text-gray-600'>
+              {formatChatListDate(chat.createdAt)}
             </span>
           </div>
           <button

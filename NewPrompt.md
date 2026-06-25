@@ -28,6 +28,7 @@ maifast web app aise kam krega agr 2+ kiye to agla number agr 4+ krke aa raha ha
 
 sheet 4
 prompt [1] jo number 23 may se lekar 27 may ke result me fb ke result me kitne nbr + krne per gb me result aa raha hai [koi b compny ho sakte hai ] ye same chiz kaha ho rahe hai btao [ fb+fb] [gb to gb] [gl to gl ] [ ds to ds ] b ho sakti hai
-prompt [2] jo nbr 24 may se 27 may me fb+gb ke nbr  me 76 32 95 0 jud kar aa rahe hai ye same chiz kaha aa rakhe hai 
+prompt
+[2] jo nbr 24 may se 27 may me fb+gb ke nbr  me 76 32 95 0 jud kar aa rahe hai ye same chiz kaha aa rakhe hai 
 date k sath b check kar sakta hai jaise uper dal rakhe hai 
 2 nbr se lekar 6 nbr tak dekh sakta hai 
