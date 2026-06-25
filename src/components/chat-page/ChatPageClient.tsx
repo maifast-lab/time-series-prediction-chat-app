@@ -52,6 +52,8 @@ export default function ChatPageClient({
   const [composerNotice, setComposerNotice] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesViewportRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetStatusQuery = useSheetDataStatus(true);
   const hasUploadedData =
@@ -75,8 +77,28 @@ export default function ChatPageClient({
     }
   }, [isResponding]);
 
+  function isNearMessagesBottom() {
+    const viewport = messagesViewportRef.current;
+
+    if (!viewport) {
+      return true;
+    }
+
+    return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 120;
+  }
+
+  function updateAutoScrollFromViewport() {
+    shouldAutoScrollRef.current = isNearMessagesBottom();
+  }
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!shouldAutoScrollRef.current) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    });
   }, [chatMessages, isResponding]);
 
   useEffect(() => {
@@ -214,6 +236,7 @@ export default function ChatPageClient({
     setComposerNotice('');
     setInputText('');
     setIsResponding(true);
+    shouldAutoScrollRef.current = true;
 
     const optimisticMessage: ChatMessage = {
       _id: `temp-${Date.now()}`,
@@ -317,6 +340,8 @@ export default function ChatPageClient({
         messages={chatMessages}
         isResponding={isResponding}
         messagesEndRef={messagesEndRef}
+        messagesViewportRef={messagesViewportRef}
+        onViewportScroll={updateAutoScrollFromViewport}
       />
       <ChatComposer
         inputRef={inputRef}

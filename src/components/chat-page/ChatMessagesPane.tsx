@@ -13,12 +13,16 @@ interface ChatMessagesPaneProps {
   messages: ChatMessage[];
   isResponding: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  messagesViewportRef: React.RefObject<HTMLDivElement | null>;
+  onViewportScroll: () => void;
 }
 
 export default function ChatMessagesPane({
   messages,
   isResponding,
   messagesEndRef,
+  messagesViewportRef,
+  onViewportScroll,
 }: ChatMessagesPaneProps) {
   const lastMessage = messages[messages.length - 1];
   const shouldShowThinking = isResponding && lastMessage?.role !== 'assistant';
@@ -27,7 +31,11 @@ export default function ChatMessagesPane({
   );
 
   return (
-    <div className='no-scrollbar flex-1 space-y-4 overflow-y-auto p-4'>
+    <div
+      ref={messagesViewportRef}
+      onScroll={onViewportScroll}
+      className='no-scrollbar flex-1 space-y-4 overflow-y-auto p-4'
+    >
       {messages.length === 0 ? (
         <EmptyChatState key='empty-state' />
       ) : null}
