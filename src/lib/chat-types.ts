@@ -18,7 +18,7 @@ export interface ChatMessage {
   createdAt: string;
   jobId?: string | null;
   isLoading?: boolean;
-  status?: 'queued' | 'processing' | 'completed' | 'failed' | null;
+  status?: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' | null;
 }
 
 export interface ChatPageData {
@@ -37,12 +37,12 @@ export interface SendChatMessageResult {
   message: ChatMessage;
   chatTitle: string | null;
   jobId?: string | null;
-  status?: 'queued' | 'processing' | 'completed' | 'failed' | null;
+  status?: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' | null;
 }
 
 export interface JobStatusResult {
   jobId: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
   error?: string;
   message: ChatMessage;
 }

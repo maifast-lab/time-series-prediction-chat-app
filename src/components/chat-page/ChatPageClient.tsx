@@ -109,6 +109,8 @@ export default function ChatPageClient({
     }
 
     let isActive = true;
+    let timeoutId: number | undefined;
+    let delayMs = 2500;
 
     async function pollJobs() {
       await Promise.all(
@@ -139,16 +141,20 @@ export default function ChatPageClient({
           }
         }),
       );
+
+      if (isActive) {
+        timeoutId = window.setTimeout(pollJobs, delayMs);
+        delayMs = Math.min(delayMs * 2, 20000);
+      }
     }
 
     void pollJobs();
-    const intervalId = window.setInterval(() => {
-      void pollJobs();
-    }, 2500);
 
     return () => {
       isActive = false;
-      window.clearInterval(intervalId);
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [pendingJobKey, router]);
 
@@ -158,6 +164,8 @@ export default function ChatPageClient({
     }
 
     let isActive = true;
+    let timeoutId: number | undefined;
+    let delayMs = 2500;
 
     async function refreshChatMessages() {
       try {
@@ -181,16 +189,20 @@ export default function ChatPageClient({
           error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
+
+      if (isActive) {
+        timeoutId = window.setTimeout(refreshChatMessages, delayMs);
+        delayMs = Math.min(delayMs * 2, 15000);
+      }
     }
 
     void refreshChatMessages();
-    const intervalId = window.setInterval(() => {
-      void refreshChatMessages();
-    }, 2500);
 
     return () => {
       isActive = false;
-      window.clearInterval(intervalId);
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
     };
   }, [chat._id, hasPendingSavedResponse, router]);
 
